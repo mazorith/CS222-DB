@@ -82,6 +82,8 @@ namespace PeterDBTesting {
 
         ASSERT_TRUE(fileExists(fileName)) << "The file should exist now: " << fileName;
 
+        int sizething = getFileSize(fileName);
+
         ASSERT_TRUE(getFileSize(fileName) % PAGE_SIZE == 0) << "File size should always be multiples of PAGE_SIZE.";
 
         // Get the number of pages in the test file. In this case, it should be zero.
@@ -158,6 +160,8 @@ namespace PeterDBTesting {
         generateData(inBuffer, PAGE_SIZE);
         ASSERT_EQ(memcmp(inBuffer, outBuffer, PAGE_SIZE), 0)
                                     << "Checking the integrity of the page should succeed.";
+
+        int something = 0;
 
     }
 
@@ -273,6 +277,7 @@ namespace PeterDBTesting {
         // Read the 86th page and check integrity
         unsigned pageNumForCheck = 86;
         outBuffer = malloc(PAGE_SIZE);
+
 
         ASSERT_EQ(fileHandle.readPage(pageNumForCheck - 1, // pageNum start from 0
                                       outBuffer), success) << "Reading a page should succeed.";

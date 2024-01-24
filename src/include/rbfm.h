@@ -8,8 +8,8 @@
 namespace PeterDB {
     // Record ID
     typedef struct {
-        unsigned pageNum;           // page number
-        unsigned short slotNum;     // slot number in the page
+        unsigned pageNum = 0;           // page number
+        unsigned short slotNum = 0;     // slot number in the page
     } RID;
 
     // Attribute
@@ -68,6 +68,8 @@ namespace PeterDB {
 
     class RecordBasedFileManager {
     public:
+        void * page;
+
         static RecordBasedFileManager &instance();                          // Access to the singleton instance
 
         RC createFile(const std::string &fileName);                         // Create a new record-based file
