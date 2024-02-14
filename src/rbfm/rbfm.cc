@@ -43,8 +43,8 @@ namespace PeterDB {
         int fieldCount = recordDescriptor.size();
         int nullField = ceil((double) fieldCount/ 8);
 
-        unsigned char* nullbits;
-        nullbits = (unsigned char*)malloc(nullField);
+        unsigned char nullbits[nullField];
+//        nullbits = (unsigned char*)malloc(nullField);
         memcpy(nullbits, (char*)data + slotOffset, nullField);
         slotOffset += nullField;
 
@@ -86,8 +86,6 @@ namespace PeterDB {
         // is needed in an existing file, will optimize later)
         if(appendCount <= 0)
         {
-//            for(int i = 0; i < 1024; i++)
-//                memcpy((char *) pageData + (i*sizeof(int)), &recordOffsetField, sizeof(int));
             memcpy((char *) pageData, (char *) data, slotOffset);
 
             //slotOffset is length of the record so:
@@ -105,61 +103,73 @@ namespace PeterDB {
 
             ibuffer = fileHandle.appendPage(pageData);
 
-//            for(int j =0; j<25;j++)
-//            {
-//                memcpy(&slotOffset, (char *) pageData +j, sizeof(int));
-//                std::cout<< j<< ":" << slotOffset << "\n";
-//            }
-
+            free(pageData);
             return ibuffer;
         }
         else
         {
             int totalRecordOffsets = 0;
             int totalRIDOffsets = 0;
-            for(int i=0; i < appendCount; i++)
-            {
-                fileHandle.readPage(i, pageData);
+            if (slotOffset <= 2000){
+                for (int i = -1; i+1 < appendCount+1; i++) {
+                    if (i == -1)
+                        fileHandle.readPage(appendCount - 1, pageData);
+                    else
+                        fileHandle.readPage(i, pageData);
 
-//                for(int j =0; j<4096;j++)
-//                {
-//                    memcpy(&totalRecordOffsets, (char *) pageData +j, sizeof(int));
-//                    std::cout<< j<< ":" << totalRecordOffsets << "\n";
-//                }
-//                throw std::invalid_argument("I want to cry");
+                    memcpy(&totalRecordOffsets, (char *) pageData + recordOffsetField, sizeof(int));
+                    memcpy(&totalRIDOffsets, (char *) pageData + RIDOffsetFields, sizeof(int));
 
-                memcpy(&totalRecordOffsets, (char *) pageData + recordOffsetField, sizeof(int));
-                memcpy(&totalRIDOffsets, (char *) pageData + RIDOffsetFields, sizeof(int));
+                    if ((totalRIDOffsets - totalRecordOffsets) > (slotOffset + (sizeof(int) * 4))) {
+                        //set rids
+                        if (i == -1)
+                            rid.pageNum = appendCount - 1;
+                        else
+                            rid.pageNum = i;
 
-                if((totalRIDOffsets-totalRecordOffsets) > (slotOffset + (sizeof(int)*4)))
-                {
-                    //set rids
-                    rid.pageNum = i;
-                    rid.slotNum = totalRIDOffsets-sizeof(int);
+                        //check if there are empty slot ids to reuse
+                        bool found_empty = false;
+                        int RID_offset = totalRIDOffsets + sizeof(int) * 2;
+                        rid.slotNum = totalRIDOffsets - sizeof(int);
+                        for (int j = RID_offset; j < RIDOffsetFields; j += sizeof(int) * 3) {
+                            memcpy(&RID_offset, (char *) pageData + j, sizeof(int));
 
-                    //add new data
-                    memcpy((char *) pageData + totalRecordOffsets, (char *) data, slotOffset);
+                            if (RID_offset == -1) {
+                                rid.slotNum = j;
+                                found_empty = true;
+                            }
+                        }
 
-                    //add new record feild in page
-                    memcpy((char *) pageData + (totalRIDOffsets-sizeof(int)), &totalRecordOffsets, sizeof(int));
-                    memcpy((char *) pageData + (totalRIDOffsets-sizeof(int)*2), &slotOffset, sizeof(int));
-                    nullField += totalRecordOffsets;
-                    memcpy((char *) pageData + (totalRIDOffsets-sizeof(int)*3), &nullField, sizeof(int));
+                        //add new data
+                        memcpy((char *) pageData + totalRecordOffsets, (char *) data, slotOffset);
 
-                    //update offset values at end of page
-                    totalRecordOffsets += slotOffset;
-                    totalRIDOffsets -= 3*sizeof(int);
-                    memcpy((char *) pageData + recordOffsetField, &totalRecordOffsets, sizeof(unsigned));
-                    memcpy((char *) pageData + RIDOffsetFields, &totalRIDOffsets, sizeof(unsigned ));
+                        //add new record feild in page
+                        memcpy((char *) pageData + (rid.slotNum), &totalRecordOffsets, sizeof(int)); //begin
+                        totalRecordOffsets += slotOffset;
+                        memcpy((char *) pageData + (rid.slotNum - sizeof(int)), &totalRecordOffsets, sizeof(int)); //end
+                        memcpy((char *) pageData + (rid.slotNum - sizeof(int) * 2), &nullField,
+                               sizeof(int)); //nullfield size
 
+                        //update offset values at end of page
+                        memcpy((char *) pageData + recordOffsetField, &totalRecordOffsets, sizeof(unsigned));
 
-                    ibuffer = fileHandle.writePage(i, pageData);
-                    return ibuffer;
+                        //if we found an empty slot no need to update the rid offset field with a new rid slot
+                        if (!found_empty) {
+                            totalRIDOffsets -= 3 * sizeof(int);
+                            memcpy((char *) pageData + RIDOffsetFields, &totalRIDOffsets, sizeof(unsigned));
+                        }
+
+                        if (i == -1)
+                            ibuffer = fileHandle.writePage(appendCount - 1, pageData);
+                        else
+                            ibuffer = fileHandle.writePage(i, pageData);
+                        free(pageData);
+                        return ibuffer;
+                    }
                 }
             }
-
-            //if here no page is large enough
-            memcpy((char *) pageData, (char *) data + slotOffset, slotOffset);
+            //if here no page is large enough overwrite the copy of the previous page
+            memcpy((char *) pageData, (char *) data, slotOffset);
 
             //slotOffset is length of the record so:
             int slotbegin=0;
@@ -176,9 +186,10 @@ namespace PeterDB {
 
             fileHandle.collectCounterValues(readCount,writeCount,appendCount);
 
-            rid.pageNum = appendCount;
+            rid.pageNum = appendCount-1;
             rid.slotNum = RIDOffsetFields-sizeof(int);
 
+            free(pageData);
             return ibuffer;
         }
 
@@ -193,25 +204,41 @@ namespace PeterDB {
         if(fileHandle.readPage(rid.pageNum, pageData) == -1)
             return -1;
 
-//        int v = 0;
-//        for(int j =0; j<25;j++)
-//        {
-//            memcpy(&v, (char *) pageData +j, sizeof(int));
-//            std::cout<< j<< ":" << v << "\n";
-//        }
-
         int recordOffset = 0; //for nullfield
         int pageOffset = 0;
         int ibuffer = 0;
 
-        //get nullfield
+        //only need these if we are reading from a rid pointer in a page
+        int newPageNum = 0;
+        int newSlotNum = 0;
+
+        //check if rid exists within current page
+        memcpy(&pageOffset, (char*)pageData +(4088), sizeof(int));
+        if(pageOffset >= rid.slotNum)
+            return -1;
+
+        //get nullfield element to check if we have pointer of another rid
         memcpy(&pageOffset, (char*)pageData +(rid.slotNum),sizeof(int));
+        memcpy(&newPageNum, (char*)pageData +(rid.slotNum-sizeof(int)*2),sizeof(int));
+        if (newPageNum == 0)
+        {
+            memcpy(&newPageNum, (char*)pageData + pageOffset,sizeof(int));
+            memcpy(&newSlotNum, (char*)pageData + pageOffset + sizeof(int),sizeof(int));
+
+            if(fileHandle.readPage(newPageNum, pageData) == -1)
+                return -1;
+
+            memcpy(&pageOffset, (char*)pageData + newSlotNum,sizeof(int));
+        }
+
+        if(pageOffset == -1)
+            return -1;
 
         int fieldCount = recordDescriptor.size();
         int nullField = ceil((double) fieldCount/ 8);
 
-        unsigned char* nullbits;
-        nullbits = (unsigned char*)malloc(nullField);
+        unsigned char nullbits[nullField];
+//        nullbits = (unsigned char*)malloc(nullField);
         memcpy(nullbits, (char*)pageData + pageOffset, nullField);
         memcpy((char*)data + recordOffset, (char*)pageData + pageOffset, nullField);
         pageOffset += nullField;
@@ -247,13 +274,69 @@ namespace PeterDB {
             }
         }
 
-        //free(pageData);
+        free(pageData);
         return 0;
     }
 
     RC RecordBasedFileManager::deleteRecord(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor,
                                             const RID &rid) {
-        return -1;
+
+        void * pageData;
+        pageData = malloc(4096);
+
+        if(fileHandle.readPage(rid.pageNum, pageData) == -1)
+            return -1;
+
+        int recordOffsetField = 4092;
+        int RIDOffsetFields = 4088;
+        int totalRecordOffsets = 0;
+        int totalRIDOffsets = 0;
+
+        memcpy(&totalRecordOffsets, (char *) pageData + recordOffsetField, sizeof(int));
+        memcpy(&totalRIDOffsets, (char *) pageData + RIDOffsetFields, sizeof(int));
+
+        int nullfieldSize = 0;
+        int slotBegin = 0;
+        int slotEnd = 0;
+
+        memcpy(&slotBegin, (char *) pageData + (rid.slotNum), sizeof(int));
+        memcpy(&slotEnd, (char *) pageData + (rid.slotNum-sizeof(int)), sizeof(int));
+        memcpy(&nullfieldSize, (char *) pageData + (rid.slotNum-sizeof(int)*2), sizeof(int));
+
+        //can't delete already deleted record
+        if(nullfieldSize == -1 || slotBegin == -1 || slotEnd == -1)
+            return -1;
+
+        int holder_value = -1;
+
+        memcpy((char *) pageData + (rid.slotNum), &holder_value, sizeof(int));
+        memcpy((char *) pageData + (rid.slotNum-sizeof(int)), &holder_value, sizeof(int));
+        memcpy((char *) pageData + (rid.slotNum-sizeof(int)*2), &holder_value, sizeof(int));
+
+        memcpy((char *) pageData + slotBegin, (char *) pageData + slotEnd, (totalRecordOffsets-slotEnd));
+
+        int index = 0;
+        for(int i = 4084; i > totalRIDOffsets; i -= sizeof(int))
+        {
+            memcpy(&holder_value, (char *) pageData + i, sizeof(int));
+
+            //we want to ignore adjusting the nullsize fields also since we will have random rid slot values we need
+            // to make sure we only move the ones > or after the current record entry
+            if (holder_value != -1 && index%3 != 2 && holder_value >= slotEnd)
+            {
+                holder_value -= (slotEnd-slotBegin);
+                memcpy((char *) pageData + i, &holder_value, sizeof(int));
+            }
+
+            ++index;
+        }
+
+        totalRecordOffsets -= (slotEnd-slotBegin);
+        memcpy((char *) pageData + recordOffsetField, &totalRecordOffsets, sizeof(int));
+
+        fileHandle.writePage(rid.pageNum, pageData);
+        free(pageData);
+        return 0;
     }
 
     RC RecordBasedFileManager::printRecord(const std::vector<Attribute> &recordDescriptor, const void *data,
@@ -265,16 +348,16 @@ namespace PeterDB {
         int fieldCount = recordDescriptor.size();
         int nullField = ceil((double) fieldCount/ 8);
 
-        int v = 0;
-        for(int j =0; j<25;j++)
-        {
-            memcpy(&v, (char *) data +j, sizeof(int));
-            std::cout<< j<< ":" << v << "\n";
-        }
+//        int v = 0;
+//        for(int j =0; j<25;j++)
+//        {
+//            memcpy(&v, (char *) data +j, sizeof(int));
+//            std::cout<< j<< ":" << v << "\n";
+//        }
 
 //        std::cout<< nullField<<"\n";
-        unsigned char* nullbits;
-        nullbits = (unsigned char*)malloc(nullField);
+        unsigned char nullbits[nullField];
+//        nullbits = (unsigned char*)malloc(nullField);
         memcpy(&nullbits, (char*)data + offset, nullField);
         offset += nullField;
 
@@ -323,12 +406,220 @@ namespace PeterDB {
             }
             out << "\n";
         }
+        //free(nullbits);
         return 0;
     }
 
     RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor,
                                             const void *data, const RID &rid) {
 
+        void * pageData;
+        pageData = malloc(4096);
+
+        if(deleteRecord(fileHandle,recordDescriptor,rid) == -1)
+            return -1;
+
+        if(fileHandle.readPage(rid.pageNum, pageData) == -1)
+            return -1;
+
+        int recordOffsetField = 4092;
+        int RIDOffsetFields = 4088;
+        int totalRecordOffsets = 0;
+        int totalRIDOffsets = 0;
+
+        memcpy(&totalRecordOffsets, (char *) pageData + recordOffsetField, sizeof(int));
+        memcpy(&totalRIDOffsets, (char *) pageData + RIDOffsetFields, sizeof(int));
+
+        int slotOffset = 0;
+        int ibuffer = 0;
+
+        int fieldCount = recordDescriptor.size();
+        int nullField = ceil((double) fieldCount/ 8);
+
+        unsigned char nullbits[nullField];
+//        nullbits = (unsigned char*)malloc(nullField);
+        memcpy(nullbits, (char*)data + slotOffset, nullField);
+        slotOffset += nullField;
+
+        for(int i=0; i < recordDescriptor.size();i++)
+        {
+            bool nullBit = nullbits[int(floor((double) i/8))] & ((unsigned) 1 << (unsigned) (7-(i%8)));
+            if(!nullBit)
+            {
+                switch (recordDescriptor[i].type) {
+                    case 0:
+                        slotOffset += sizeof(int);
+                        break;
+                    case 1:
+                        slotOffset += sizeof(float);
+                        break;
+                    case 2:
+                        ibuffer = 0;
+                        memcpy(&ibuffer, (char *) data + slotOffset, sizeof(int));
+                        slotOffset += sizeof(int);
+                        slotOffset += ibuffer;
+                        break;
+                }
+            }
+        }
+
+        if((totalRIDOffsets-totalRecordOffsets) > (slotOffset + (sizeof(int)*4)))
+        {
+            //add new data
+            memcpy((char *) pageData + totalRecordOffsets, (char *) data, slotOffset);
+
+            //add new record feild in page
+            memcpy((char *) pageData + (rid.slotNum), &totalRecordOffsets, sizeof(int));
+            totalRecordOffsets += slotOffset;
+            memcpy((char *) pageData + (rid.slotNum-sizeof(int)), &totalRecordOffsets, sizeof(int));
+            memcpy((char *) pageData + (rid.slotNum-sizeof(int)*2), &nullField, sizeof(int));
+
+            //update offset values at end of page
+            memcpy((char *) pageData + recordOffsetField, &totalRecordOffsets, sizeof(unsigned));
+
+            ibuffer = fileHandle.writePage(rid.pageNum, pageData);
+            free(pageData);
+            if (ibuffer == -1)
+                return -1;
+            else
+                return 0;
+        }
+        else
+        {
+            void * pageData2;
+            pageData2 = malloc(4096);
+
+            int new_pageNum = 0;
+            int new_slotNum = 4084;
+
+            unsigned readCount = 0;
+            unsigned writeCount = 0;
+            unsigned appendCount = 0;
+
+            fileHandle.collectCounterValues(readCount,writeCount,appendCount);
+
+            int totalRecordOffsets2 = 0;
+            int totalRIDOffsets2 = 0;
+            for(int i=-1; i+1 < appendCount+1; i++)
+            {
+                if(i==-1)
+                    fileHandle.readPage(appendCount-1, pageData2);
+                else
+                    fileHandle.readPage(i, pageData2);
+
+                memcpy(&totalRecordOffsets2, (char *) pageData2 + recordOffsetField, sizeof(int));
+                memcpy(&totalRIDOffsets2, (char *) pageData2 + RIDOffsetFields, sizeof(int));
+
+                if((totalRIDOffsets2-totalRecordOffsets2) > (slotOffset + (sizeof(int)*4)))
+                {
+                    //set rids
+                    if(i==-1)
+                        new_pageNum = appendCount-1;
+                    else
+                        new_pageNum = i;
+
+                    //search for empty slots to reuse
+                    bool found_empty = false;
+                    int RID_offset = totalRIDOffsets2 + sizeof(int)*2;
+                    new_slotNum = totalRIDOffsets2 - sizeof(int);
+                    for(int j = RID_offset; j < RIDOffsetFields ; j += sizeof(int)*3)
+                    {
+                        memcpy(&RID_offset, (char *) pageData2 + j, sizeof(int));
+
+                        if(RID_offset == -1) {
+                            new_slotNum = j;
+                            found_empty = true;
+                        }
+                    }
+
+                    //add new data
+                    memcpy((char *) pageData2 + totalRecordOffsets2, (char *) data, slotOffset);
+
+                    //add new record feild in page
+                    memcpy((char *) pageData2 + (new_slotNum), &totalRecordOffsets2, sizeof(int));
+                    totalRecordOffsets2 += slotOffset;
+                    memcpy((char *) pageData2 + (new_slotNum-sizeof(int)), &totalRecordOffsets2, sizeof(int));
+                    memcpy((char *) pageData2 + (new_slotNum-sizeof(int)*2), &nullField, sizeof(int));
+
+                    //update offset values at end of page
+                    memcpy((char *) pageData2 + recordOffsetField, &totalRecordOffsets2, sizeof(unsigned));
+
+                    //if we need to add a new slot record
+                    if(!found_empty)
+                    {
+                        totalRIDOffsets2 -= 3*sizeof(int);
+                        memcpy((char *) pageData2 + RIDOffsetFields, &totalRIDOffsets2, sizeof(unsigned ));
+                    }
+
+                    if(i==-1)
+                        ibuffer = fileHandle.writePage(appendCount-1, pageData2);
+                    else
+                        ibuffer = fileHandle.writePage(i, pageData2);
+                    if (ibuffer == -1)
+                        return -1;
+
+                    //update old rid slot with pointer
+                    int new_ptr_size = totalRecordOffsets + sizeof(int)*2;
+                    int empty_nullfield = 0;
+                    memcpy((char *) pageData + totalRecordOffsets, &new_pageNum, sizeof(int));
+                    memcpy((char *) pageData + totalRecordOffsets + sizeof(int), &new_slotNum, sizeof(int));
+
+                    memcpy((char *) pageData + rid.slotNum, &totalRecordOffsets, sizeof(int));
+                    memcpy((char *) pageData + rid.slotNum-sizeof(int), &new_ptr_size, sizeof(int));
+                    memcpy((char *) pageData + rid.slotNum-sizeof(int)*2, &empty_nullfield, sizeof(int));
+                    //update page with the 8 new bytes for the pointer values
+                    memcpy((char *) pageData + recordOffsetField, &new_ptr_size, sizeof(int));
+
+                    ibuffer = fileHandle.writePage(rid.pageNum, pageData);
+                    free(pageData2);
+                    free(pageData);
+                    if (ibuffer == -1)
+                        return -1;
+                    else
+                        return 0;
+                }
+            }
+
+            //if here no page is large enough overwrite the copy of the previous page
+            memcpy((char *) pageData2, (char *) data, slotOffset);
+
+            //slotOffset is length of the record so:
+            int slotbegin=0;
+            int RIDOffsetvalue2 = 4076;
+            memcpy((char *) pageData2 + (RIDOffsetFields-sizeof(int)), &slotbegin, sizeof(int));
+            memcpy((char *) pageData2 + (RIDOffsetFields-sizeof(int)*2), &slotOffset, sizeof(int));
+            memcpy((char *) pageData2 + (RIDOffsetFields-sizeof(int)*3), &nullField, sizeof(int));
+            memcpy((char *) pageData2 + RIDOffsetFields, &RIDOffsetvalue2, sizeof(int ));
+            memcpy((char *) pageData2 + recordOffsetField, &slotOffset, sizeof(int));
+
+            ibuffer = fileHandle.appendPage(pageData2);
+            if (ibuffer == -1)
+                return -1;
+
+            fileHandle.collectCounterValues(readCount,writeCount,appendCount);
+
+            //update old rid slot with pointer
+            new_pageNum = appendCount-1;
+            new_slotNum = RIDOffsetFields-sizeof(int);
+            int new_ptr_size = totalRecordOffsets + sizeof(int)*2;
+            int empty_nullfield = 0;
+            memcpy((char *) pageData + totalRecordOffsets, &new_pageNum, sizeof(int));
+            memcpy((char *) pageData + totalRecordOffsets + sizeof(int), &new_slotNum, sizeof(int));
+
+            memcpy((char *) pageData + rid.slotNum, &totalRecordOffsets, sizeof(int));
+            memcpy((char *) pageData + rid.slotNum-sizeof(int), &new_ptr_size, sizeof(int));
+            memcpy((char *) pageData + rid.slotNum-sizeof(int)*2, &empty_nullfield, sizeof(int));
+            //update page with the 8 new bytes for the pointer values
+            memcpy((char *) pageData + recordOffsetField, &new_ptr_size, sizeof(int));
+
+            ibuffer = fileHandle.writePage(rid.pageNum, pageData);
+            free(pageData2);
+            free(pageData);
+            if (ibuffer == -1)
+                return -1;
+            else
+                return 0;
+        }
 
 
         return -1;
@@ -336,14 +627,406 @@ namespace PeterDB {
 
     RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor,
                                              const RID &rid, const std::string &attributeName, void *data) {
-        return -1;
+        void * pageData;
+        pageData = malloc(4096);
+
+        if(fileHandle.readPage(rid.pageNum, pageData) == -1)
+            return -1;
+
+        int pageOffset = 0;
+        int ibuffer = 0;
+
+        //only need these if we are reading from a rid pointer in a page
+        int newPageNum = 0;
+        int newSlotNum = 0;
+
+        //get nullfield element to check if we have pointer of another rid
+        memcpy(&pageOffset, (char*)pageData +(rid.slotNum),sizeof(int));
+        memcpy(&newPageNum, (char*)pageData +(rid.slotNum-sizeof(int)*2),sizeof(int));
+        if (newPageNum == 0)
+        {
+            memcpy(&newPageNum, (char*)pageData + pageOffset,sizeof(int));
+            memcpy(&newSlotNum, (char*)pageData + pageOffset + sizeof(int),sizeof(int));
+
+            if(fileHandle.readPage(newPageNum, pageData) == -1)
+                return -1;
+
+            memcpy(&pageOffset, (char*)pageData + newSlotNum,sizeof(int));
+        }
+
+        if(pageOffset == -1)
+            return -1;
+
+        int fieldCount = recordDescriptor.size();
+        int nullField = ceil((double) fieldCount/ 8);
+
+        unsigned char nullbits[nullField];
+//        nullbits = (unsigned char*)malloc(nullField);
+        memcpy(nullbits, (char*)pageData + pageOffset, nullField);
+        pageOffset += nullField;
+
+        for(int i=0; i < recordDescriptor.size();i++)
+        {
+
+            bool nullBit = nullbits[int(floor((double) i/8))] & ((unsigned) 1 << (unsigned) (7-(i%8)));
+            if(!nullBit) {
+                switch (recordDescriptor[i].type) {
+                    case 0:
+                        if(recordDescriptor[i].name == attributeName)
+                            memcpy((char *) data+1, (char *) pageData + pageOffset, sizeof(int));
+                        pageOffset += sizeof(int);
+                        break;
+                    case 1:
+                        if(recordDescriptor[i].name == attributeName)
+                            memcpy((char *) data+1, (char *) pageData + pageOffset, sizeof(float));
+                        pageOffset += sizeof(float);
+                        break;
+                    case 2:
+                        ibuffer = 0;
+                        memcpy(&ibuffer, (char *) pageData + pageOffset, sizeof(int));
+                        if(recordDescriptor[i].name == attributeName)
+                            memcpy((char *) data+1, &ibuffer, sizeof(int));
+                        pageOffset += sizeof(int);
+
+                        if(recordDescriptor[i].name == attributeName)
+                            memcpy((char *) data+1 + sizeof(int), (char *) pageData + pageOffset, ibuffer);
+                        pageOffset += ibuffer;
+                        break;
+                }
+            }
+            else
+            {
+                if(recordDescriptor[i].name == attributeName)
+                {
+                    unsigned char nbit = (unsigned char) 1 << (unsigned) 7;
+                    memcpy((char *) data, &nbit, 1);
+                }
+            }
+        }
+
+        free(pageData);
+        return 0;
     }
 
     RC RecordBasedFileManager::scan(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor,
                                     const std::string &conditionAttribute, const CompOp compOp, const void *value,
                                     const std::vector<std::string> &attributeNames,
                                     RBFM_ScanIterator &rbfm_ScanIterator) {
-        return -1;
+        void* data;
+        data = malloc(4096);
+
+        void* pageData;
+        pageData = malloc(4096);
+
+        unsigned char nullTestVar = 0;
+
+        unsigned end_of_page = 0;
+        RID rid;
+        rid.pageNum = 0;
+        rid.slotNum = 4084;
+
+        //get first page
+        if(fileHandle.readPage(rid.pageNum, pageData) == -1)
+            return -1;
+
+        memcpy(&end_of_page, (char*)pageData+4088, sizeof(unsigned));
+
+        //=====================CHECKING FOR UPDATED VALUES========================
+        //only need these if we are reading from a rid pointer in a page
+//        int pageOffset = 0;
+//        int newPageNum = 0;
+//        int newSlotNum = 0;
+//
+//        //check if rid exists within current page
+//        memcpy(&pageOffset, (char*)pageData +(4088), sizeof(int));
+//        if(pageOffset >= rid.slotNum)
+//            return -1;
+//
+//        //get nullfield element to check if we have pointer of another rid
+//        memcpy(&pageOffset, (char*)pageData +(rid.slotNum),sizeof(int));
+//        memcpy(&newPageNum, (char*)pageData +(rid.slotNum-sizeof(int)*2),sizeof(int));
+//        if (newPageNum == 0)
+//        {
+//            memcpy(&newPageNum, (char*)pageData + pageOffset,sizeof(int));
+//            memcpy(&newSlotNum, (char*)pageData + pageOffset + sizeof(int),sizeof(int));
+//
+//            if(fileHandle.readPage(newPageNum, pageData) == -1)
+//                return -1;
+//
+//            memcpy(&pageOffset, (char*)pageData + newSlotNum,sizeof(int));
+//        }
+//
+//        if(pageOffset == -1)
+//            return -1;
+        //===============================END CHECK================================
+
+        bool accept_data = true;
+        int int_holder = 0;
+        int compInt;
+        float float_holder = 0.0;
+        float compFloat;
+        std::string str_holder = "";
+        const char* compStr;
+        int dataType = 0; //int 0, float 1, string 2
+        if (conditionAttribute != "")
+        {
+            accept_data = false;
+            for (int i = 0; i < recordDescriptor.size(); i++)
+            {
+                if (recordDescriptor[i].name == conditionAttribute)
+                {
+                    if (recordDescriptor[i].type == AttrType::TypeVarChar)
+                    {
+                        dataType = 2;
+                        compStr = static_cast<const char*>(value);
+                    } else if (recordDescriptor[i].type == AttrType::TypeReal)
+                    {
+                        dataType = 1;
+                        compFloat = *reinterpret_cast<const float*>(value);
+                    }
+                else
+                    compInt = *reinterpret_cast<const int*>(value);
+
+                    i = recordDescriptor.size();
+                }
+            }
+        }
+
+        rbfm_ScanIterator.recordDescriptor = recordDescriptor;
+        rbfm_ScanIterator.attributeNames = attributeNames;
+
+        while(rid.pageNum < fileHandle.appendPageCounter)
+        {
+            while(end_of_page >= rid.slotNum && rid.pageNum < fileHandle.appendPageCounter)
+            {
+                rid.pageNum += 1;
+                rid.slotNum = 4084;
+                if(rid.pageNum < fileHandle.appendPageCounter)
+                {
+                    fileHandle.readPage(rid.pageNum, pageData);
+                    end_of_page = 0;
+                    memcpy(&end_of_page, (char*)pageData+4088, sizeof(unsigned));
+                }
+            }
+
+            if(rid.pageNum < fileHandle.appendPageCounter)
+            {
+                if(conditionAttribute != "")
+                {
+                    readAttribute(fileHandle, recordDescriptor, rid, conditionAttribute, data);
+                    memcpy(&nullTestVar, (char *)data, 1);
+                    if(!bool((nullTestVar & ((unsigned) 1 << (unsigned) 7))))
+                    {
+                        // we dont know what values we will need to check so we will need nested switch statments
+                        accept_data = false;
+                        switch(dataType)
+                        {
+                            case 0:
+                                memcpy(&int_holder, (char*) data+1, sizeof(int));
+                                switch(compOp)
+                                {
+                                    case 0:
+                                        accept_data = (int_holder == compInt);
+                                        break;
+                                    case 1:
+                                        accept_data = (int_holder < compInt);
+                                        break;
+                                    case 2:
+                                        accept_data = (int_holder <= compInt);
+                                        break;
+                                    case 3:
+                                        accept_data = (int_holder > compInt);
+                                        break;
+                                    case 4:
+                                        accept_data = (int_holder >= compInt);
+                                        break;
+                                    case 5:
+                                        accept_data = (int_holder != compInt);
+                                        break;
+                                    case 6:
+                                        accept_data = true;
+                                        break;
+                                }
+                                break;
+                            case 1:
+                                memcpy(&float_holder, (char*) data+1, sizeof(float));
+                                switch(compOp)
+                                {
+                                    case 0:
+                                        accept_data = (float_holder == compFloat);
+                                        break;
+                                    case 1:
+                                        accept_data = (float_holder < compFloat);
+                                        break;
+                                    case 2:
+                                        accept_data = (float_holder <= compFloat);
+                                        break;
+                                    case 3:
+                                        accept_data = (float_holder > compFloat);
+                                        break;
+                                    case 4:
+                                        accept_data = (float_holder >= compFloat);
+                                        break;
+                                    case 5:
+                                        accept_data = (float_holder != compFloat);
+                                        break;
+                                    case 6:
+                                        accept_data = true;
+                                        break;
+                                }
+                                break;
+                            case 2:
+                                memcpy(&int_holder, (char*) data+1, sizeof(int));
+                                memcpy((char*)str_holder.data(), (char*) data+5, int_holder);
+                                switch(compOp)
+                                {
+
+                                    case 0:
+                                        accept_data = (str_holder == compStr);
+                                        break;
+                                    case 1:
+                                        accept_data = (str_holder < compStr);
+                                        break;
+                                    case 2:
+                                        accept_data = (str_holder <= compStr);
+                                        break;
+                                    case 3:
+                                        accept_data = (str_holder > compStr);
+                                        break;
+                                    case 4:
+                                        accept_data = (str_holder >= compStr);
+                                        break;
+                                    case 5:
+                                        accept_data = (str_holder != compStr);
+                                        break;
+                                    case 6:
+                                        accept_data = true;
+                                        break;
+                                }
+                                break;
+                        }
+                    }
+                }
+
+                if(accept_data)
+                    rbfm_ScanIterator.rids.push_back(rid);
+
+                rid.slotNum -= 12;
+            }
+        }
+
+        free(data);
+        free(pageData);
+        return 0;
+    }
+
+    RC RecordBasedFileManager::custom_extract(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor,
+                                              std::vector<std::string> attributeNames,  int &current_page,
+                                              RID &rid, void *pageData, void *data)
+    {
+        if(current_page != rid.pageNum)
+        {
+            if(fileHandle.readPage(rid.pageNum, pageData) == -1)
+                return -1;
+            current_page = rid.pageNum;
+        }
+
+        int dataOffset = 0;
+        int pageOffset = 0;
+        int ibuffer = 0;
+
+        //only need these if we are reading from a rid pointer in a page
+        int newPageNum = 0;
+        int newSlotNum = 0;
+
+        //get nullfield element to check if we have pointer of another rid
+        memcpy(&pageOffset, (char*)pageData +(rid.slotNum),sizeof(int));
+        memcpy(&newPageNum, (char*)pageData +(rid.slotNum-sizeof(int)*2),sizeof(int));
+        if (newPageNum == 0)
+        {
+            memcpy(&newPageNum, (char*)pageData + pageOffset,sizeof(int));
+            memcpy(&newSlotNum, (char*)pageData + pageOffset + sizeof(int),sizeof(int));
+
+            if(fileHandle.readPage(newPageNum, pageData) == -1)
+                return -1;
+
+            memcpy(&pageOffset, (char*)pageData + newSlotNum,sizeof(int));
+        }
+
+        if(pageOffset == -1)
+            return -1;
+
+        int fieldCount_R = attributeNames.size();
+        int nullField_R = ceil((double) fieldCount_R/ 8);
+        unsigned char nullbits_R[nullField_R];
+        //set the datas nullfeilds
+        for(int i = 0; i < nullField_R; i++)
+            nullbits_R[i] = 0;
+        dataOffset += nullField_R;
+
+        int fieldCount = recordDescriptor.size();
+        int nullField = ceil((double) fieldCount/ 8);
+
+        unsigned char nullbits[nullField];
+        memcpy(nullbits, (char*)pageData + pageOffset, nullField);
+        pageOffset += nullField;
+
+        int attr_index = 0; //I am assuming the attribute names are in order with the record descriptor
+        for(int i=0; i < recordDescriptor.size();i++)
+        {
+
+            bool nullBit = nullbits[int(floor((double) i/8))] & ((unsigned) 1 << (unsigned) (7-(i%8)));
+            if(!nullBit) {
+                switch (recordDescriptor[i].type) {
+                    case 0:
+                        if(recordDescriptor[i].name == attributeNames[attr_index])
+                        {
+                            memcpy((char *) data+dataOffset, (char *) pageData + pageOffset, sizeof(int));
+                            attr_index++;
+                            dataOffset += sizeof(int);
+                        }
+                        pageOffset += sizeof(int);
+                        break;
+                    case 1:
+                        if(recordDescriptor[i].name == attributeNames[attr_index])
+                        {
+                            memcpy((char *) data + dataOffset, (char *) pageData + pageOffset, sizeof(float));
+                            attr_index++;
+                            dataOffset += sizeof(float);
+                        }
+                        pageOffset += sizeof(float);
+                        break;
+                    case 2:
+                        ibuffer = 0;
+                        memcpy(&ibuffer, (char *) pageData + pageOffset, sizeof(int));
+                        if(recordDescriptor[i].name == attributeNames[attr_index])
+                        {
+                            memcpy((char *) data+dataOffset, &ibuffer, sizeof(int));
+                            dataOffset += sizeof(int);
+                        }
+                        pageOffset += sizeof(int);
+
+                        if(recordDescriptor[i].name == attributeNames[attr_index])
+                        {
+                            memcpy((char *) data+dataOffset, (char *) pageData + pageOffset, ibuffer);
+                            attr_index++;
+                            dataOffset += ibuffer;
+                        }
+                        pageOffset += ibuffer;
+                        break;
+                }
+            }
+            else
+            {
+                if(recordDescriptor[i].name == attributeNames[attr_index])
+                {
+                    nullbits_R[int(floor((double) attr_index/8))] += ((unsigned) 1 << (unsigned) (7-(attr_index%8)));
+                    attr_index++;
+                }
+            }
+        }
+        memcpy((char *) data, &nullbits_R, nullField_R);
+        return 0;
     }
 
 } // namespace PeterDB

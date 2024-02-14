@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 #include "src/include/rbfm.h"
 
@@ -15,6 +16,32 @@ namespace PeterDB {
         RM_ScanIterator();
 
         ~RM_ScanIterator();
+
+        FileHandle *fileHandle;
+        std::string table_name; //table name is the file name, we will need it for efficiency
+        bool file_is_open = false;
+        bool reset_values = true; //I can't belive I actually need this. Theres a stupid error that i'm not going to explain here
+
+        void *pageData = malloc(4096);
+        int end_of_page = 0;
+        bool pageData_collected = false;
+
+        //for the scan function we will want a RBFM_ScanIterator conditions and
+        //the attributes we care about
+        RecordBasedFileManager *rbfm; //we need a pointer to this because we are required to use its functions
+        RBFM_ScanIterator * rbfm_ScanIterator;
+        std::vector<Attribute> attrs;
+        std::vector<std::string> attributeNames;
+
+        //---------
+        std::vector<RID> rids;
+        int index = 0;
+        int current_page = -1; //set to -1 to trigger the read in the custom rbfm function
+
+        //we also want a variable to determine which scan functinality we are using
+        //if we are doing a catalog scan we can be simple and scan every entry else we need to scan
+        //from the rids vector
+        bool scan_function = false;
 
         // "data" follows the same format as RelationManager::insertTuple()
         RC getNextTuple(RID &rid, void *data);
@@ -89,6 +116,23 @@ namespace PeterDB {
                      bool lowKeyInclusive,
                      bool highKeyInclusive,
                      RM_IndexScanIterator &rm_IndexScanIterator);
+
+    private:
+        //TODO: move these to localized functions
+        //as these are the master tables we NEED to keep track of their entries. We could scan but a scan is too complicated
+        std::unordered_map<std::string, std::vector<RID>> tableRIDS;
+        std::unordered_map<std::string, std::vector<RID>> columnRIDS;
+
+        //NOT THIS ONE!
+        std::vector<Attribute> table_attrs;
+        std::vector<Attribute> column_attrs;
+        RecordBasedFileManager *rbfm;
+        bool has_catalog = false;
+        unsigned tablecount = 0;
+
+        std::unordered_map<AttrType, int> attrConvert{{AttrType::TypeInt, 0},
+                                                      {AttrType::TypeReal, 1},
+                                                      {AttrType::TypeVarChar, 2}};
 
     protected:
         RelationManager();                                                  // Prevent construction

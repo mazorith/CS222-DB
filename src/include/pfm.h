@@ -6,6 +6,7 @@
 #include <string>
 #include <fstream>
 #include <cstring>
+#include <vector>
 
 namespace PeterDB {
 
@@ -34,15 +35,23 @@ namespace PeterDB {
     class FileHandle {
     public:
         // variables to keep the counter for each operation
-        unsigned readPageCounter;
-        unsigned writePageCounter;
-        unsigned appendPageCounter;
+        //these will be saved on the very final page. The very final page will only contain these values
+        unsigned readPageCounter = 0;
+        unsigned writePageCounter = 0;
+        unsigned appendPageCounter = 0;
+        bool has_saved_values = false;
+        //will save attributes on final hidden page(s)
+        //first byte will denote the amount of attribute elements
+        //subsequent bytes will denote the data type. (0,1, or 2)
+        unsigned masterAttributeCount = 0;
+        unsigned attributePageCounter = 0; //number of pages after appended data pages
+        std::vector<std::vector<unsigned>> attributes;
+        //the names for each attribute will be saved
+        std::vector<std::vector<std::string>> attribute_names;
 
         const char *file;
         const char *counterFile;
-        bool has_saved_values = false;
-        int totalPages = 0;
-        //FILE * file;
+        unsigned totalPages = 0;
 
         FileHandle();                                                       // Default constructor
         ~FileHandle();                                                      // Destructor

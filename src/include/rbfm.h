@@ -2,6 +2,7 @@
 #define _rbfm_h_
 
 #include <vector>
+#include <cmath>
 
 #include "pfm.h"
 
@@ -58,12 +59,155 @@ namespace PeterDB {
 
         ~RBFM_ScanIterator() = default;;
 
+        std::vector<RID> rids;
+        void* pageData = malloc(4096);
+        unsigned current_page = 0;
+        unsigned index = 0;
+        bool first_fix = true;
+
+        std::string filename = "";
+        PagedFileManager * pfm;
+        FileHandle fileHandle;
+
+        std::vector<Attribute> recordDescriptor;
+        std::vector<std::string> attributeNames;
+
         // Never keep the results in the memory. When getNextRecord() is called,
         // a satisfying record needs to be fetched from the file.
         // "data" follows the same format as RecordBasedFileManager::insertRecord().
-        RC getNextRecord(RID &rid, void *data) { return RBFM_EOF; };
+        RC getNextRecord(RID &rid, void *data)
+        {
+            if(first_fix)
+            {
+                first_fix = false;
+                current_page = 0;
+                index = 0;
+                pfm = &PagedFileManager::instance();
+                pfm->openFile(filename,fileHandle);
+            }
 
-        RC close() { return -1; };
+            if(index >= rids.size())
+            {
+                free(pageData);
+                pfm->closeFile(fileHandle);
+                return RBFM_EOF;
+            }
+            else
+            {
+                if(current_page != rids[index].pageNum)
+                {
+                    if(fileHandle.readPage(rids[index].pageNum, pageData) == -1)
+                        return -1;
+                    current_page = rids[index].pageNum;
+                }
+
+                rid.pageNum = rids[index].pageNum;
+                rid.slotNum = rids[index].slotNum;
+
+                int dataOffset = 0;
+                int pageOffset = 0;
+                int ibuffer = 0;
+
+                //only need these if we are reading from a rid pointer in a page
+                int newPageNum = 0;
+                int newSlotNum = 0;
+
+                //get nullfield element to check if we have pointer of another rid
+                memcpy(&pageOffset, (char*)pageData +(rid.slotNum),sizeof(int));
+                memcpy(&newPageNum, (char*)pageData +(rid.slotNum-sizeof(int)*2),sizeof(int));
+                if (newPageNum == 0)
+                {
+                    memcpy(&newPageNum, (char*)pageData + pageOffset,sizeof(int));
+                    memcpy(&newSlotNum, (char*)pageData + pageOffset + sizeof(int),sizeof(int));
+
+                    if(fileHandle.readPage(newPageNum, pageData) == -1)
+                        return -1;
+
+                    memcpy(&pageOffset, (char*)pageData + newSlotNum,sizeof(int));
+                }
+
+                if(pageOffset == -1)
+                    return -1;
+
+                int fieldCount_R = attributeNames.size();
+                int nullField_R = ceil((double) fieldCount_R/ 8);
+                unsigned char nullbits_R[nullField_R];
+                //set the datas nullfeilds
+                for(int i = 0; i < nullField_R; i++)
+                    nullbits_R[i] = 0;
+                dataOffset += nullField_R;
+
+                int fieldCount = recordDescriptor.size();
+                int nullField = ceil((double) fieldCount/ 8);
+
+                unsigned char nullbits[nullField];
+                memcpy(nullbits, (char*)pageData + pageOffset, nullField);
+                pageOffset += nullField;
+
+                int attr_index = 0; //I am assuming the attribute names are in order with the record descriptor
+                for(int i=0; i < recordDescriptor.size();i++)
+                {
+
+                    bool nullBit = nullbits[int(floor((double) i/8))] & ((unsigned) 1 << (unsigned) (7-(i%8)));
+                    if(!nullBit) {
+                        switch (recordDescriptor[i].type) {
+                            case 0:
+                                if(recordDescriptor[i].name == attributeNames[attr_index])
+                                {
+                                    memcpy((char *) data+dataOffset, (char *) pageData + pageOffset, sizeof(int));
+                                    attr_index++;
+                                    dataOffset += sizeof(int);
+                                }
+                                pageOffset += sizeof(int);
+                                break;
+                            case 1:
+                                if(recordDescriptor[i].name == attributeNames[attr_index])
+                                {
+                                    memcpy((char *) data + dataOffset, (char *) pageData + pageOffset, sizeof(float));
+                                    attr_index++;
+                                    dataOffset += sizeof(float);
+                                }
+                                pageOffset += sizeof(float);
+                                break;
+                            case 2:
+                                ibuffer = 0;
+                                memcpy(&ibuffer, (char *) pageData + pageOffset, sizeof(int));
+                                if(recordDescriptor[i].name == attributeNames[attr_index])
+                                {
+                                    memcpy((char *) data+dataOffset, &ibuffer, sizeof(int));
+                                    dataOffset += sizeof(int);
+                                }
+                                pageOffset += sizeof(int);
+
+                                if(recordDescriptor[i].name == attributeNames[attr_index])
+                                {
+                                    memcpy((char *) data+dataOffset + sizeof(int), (char *) pageData + pageOffset, ibuffer);
+                                    attr_index++;
+                                    dataOffset += ibuffer;
+                                }
+                                pageOffset += ibuffer;
+                                break;
+                        }
+                    }
+                    else
+                    {
+                        if(recordDescriptor[i].name == attributeNames[attr_index])
+                        {
+                            nullbits_R[int(floor((double) attr_index/8))] += ((unsigned) 1 << (unsigned) (7-(attr_index%8)));
+                            attr_index++;
+                        }
+                    }
+                }
+                memcpy((char *) data, &nullbits_R, nullField_R);
+                return 0;
+            }
+
+        };
+
+        RC close()
+        {
+            return -1;
+        };
     };
 
     class RecordBasedFileManager {
@@ -125,6 +269,11 @@ namespace PeterDB {
         // Read an attribute given its name and the rid.
         RC readAttribute(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor, const RID &rid,
                          const std::string &attributeName, void *data);
+
+        //due to some currently unexplainable errors I need this custsom_extract function
+        RC custom_extract(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor,
+                          std::vector<std::string> attributeNames, int &current_page,
+                          RID &rid, void *pageData, void *data);
 
         // Scan returns an iterator to allow the caller to go through the results one by one.
         RC scan(FileHandle &fileHandle,
