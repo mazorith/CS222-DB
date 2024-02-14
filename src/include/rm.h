@@ -29,7 +29,7 @@ namespace PeterDB {
         //for the scan function we will want a RBFM_ScanIterator conditions and
         //the attributes we care about
         RecordBasedFileManager *rbfm; //we need a pointer to this because we are required to use its functions
-        RBFM_ScanIterator * rbfm_ScanIterator;
+//        RBFM_ScanIterator * rbfm_ScanIterator;
         std::vector<Attribute> attrs;
         std::vector<std::string> attributeNames;
 

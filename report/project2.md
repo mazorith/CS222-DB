@@ -118,7 +118,6 @@ N/A
 ### 9. Other (optional)
 - Freely use this section to tell us about things that are related to the project 2, but not related to the other sections (optional)
 
-
 - Feedback on the project to help improve the project. (optional)
 
 I was struggling to complete this on time as I had a funeral to attend for my grandmother. I realized that the later projects in this course

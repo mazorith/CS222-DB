@@ -60,17 +60,17 @@ namespace PeterDB {
         ~RBFM_ScanIterator() = default;;
 
         std::vector<RID> rids;
-        void* pageData = malloc(4096);
+//        void* pageData = malloc(4096);
         unsigned current_page = 0;
         unsigned index = 0;
         bool first_fix = true;
 
         std::string filename = "";
-        PagedFileManager * pfm;
-        FileHandle fileHandle;
+//        PagedFileManager * pfm;
+//        FileHandle fileHandle;
 
-        std::vector<Attribute> recordDescriptor;
-        std::vector<std::string> attributeNames;
+//        std::vector<Attribute> recordDescriptor;
+//        std::vector<std::string> attributeNames;
 
         // Never keep the results in the memory. When getNextRecord() is called,
         // a satisfying record needs to be fetched from the file.
@@ -82,24 +82,24 @@ namespace PeterDB {
                 first_fix = false;
                 current_page = 0;
                 index = 0;
-                pfm = &PagedFileManager::instance();
-                pfm->openFile(filename,fileHandle);
+//                pfm = &PagedFileManager::instance();
+//                pfm->openFile(filename,fileHandle);
             }
 
             if(index >= rids.size())
             {
-                free(pageData);
-                pfm->closeFile(fileHandle);
+//                free(pageData);
+//                pfm->closeFile(fileHandle);
                 return RBFM_EOF;
             }
             else
             {
-                if(current_page != rids[index].pageNum)
-                {
-                    if(fileHandle.readPage(rids[index].pageNum, pageData) == -1)
-                        return -1;
-                    current_page = rids[index].pageNum;
-                }
+//                if(current_page != rids[index].pageNum)
+//                {
+//                    if(fileHandle.readPage(rids[index].pageNum, pageData) == -1)
+//                        return -1;
+//                    current_page = rids[index].pageNum;
+//                }
 
                 rid.pageNum = rids[index].pageNum;
                 rid.slotNum = rids[index].slotNum;
@@ -112,93 +112,93 @@ namespace PeterDB {
                 int newPageNum = 0;
                 int newSlotNum = 0;
 
-                //get nullfield element to check if we have pointer of another rid
-                memcpy(&pageOffset, (char*)pageData +(rid.slotNum),sizeof(int));
-                memcpy(&newPageNum, (char*)pageData +(rid.slotNum-sizeof(int)*2),sizeof(int));
-                if (newPageNum == 0)
-                {
-                    memcpy(&newPageNum, (char*)pageData + pageOffset,sizeof(int));
-                    memcpy(&newSlotNum, (char*)pageData + pageOffset + sizeof(int),sizeof(int));
-
-                    if(fileHandle.readPage(newPageNum, pageData) == -1)
-                        return -1;
-
-                    memcpy(&pageOffset, (char*)pageData + newSlotNum,sizeof(int));
-                }
-
-                if(pageOffset == -1)
-                    return -1;
-
-                int fieldCount_R = attributeNames.size();
-                int nullField_R = ceil((double) fieldCount_R/ 8);
-                unsigned char nullbits_R[nullField_R];
-                //set the datas nullfeilds
-                for(int i = 0; i < nullField_R; i++)
-                    nullbits_R[i] = 0;
-                dataOffset += nullField_R;
-
-                int fieldCount = recordDescriptor.size();
-                int nullField = ceil((double) fieldCount/ 8);
-
-                unsigned char nullbits[nullField];
-                memcpy(nullbits, (char*)pageData + pageOffset, nullField);
-                pageOffset += nullField;
-
-                int attr_index = 0; //I am assuming the attribute names are in order with the record descriptor
-                for(int i=0; i < recordDescriptor.size();i++)
-                {
-
-                    bool nullBit = nullbits[int(floor((double) i/8))] & ((unsigned) 1 << (unsigned) (7-(i%8)));
-                    if(!nullBit) {
-                        switch (recordDescriptor[i].type) {
-                            case 0:
-                                if(recordDescriptor[i].name == attributeNames[attr_index])
-                                {
-                                    memcpy((char *) data+dataOffset, (char *) pageData + pageOffset, sizeof(int));
-                                    attr_index++;
-                                    dataOffset += sizeof(int);
-                                }
-                                pageOffset += sizeof(int);
-                                break;
-                            case 1:
-                                if(recordDescriptor[i].name == attributeNames[attr_index])
-                                {
-                                    memcpy((char *) data + dataOffset, (char *) pageData + pageOffset, sizeof(float));
-                                    attr_index++;
-                                    dataOffset += sizeof(float);
-                                }
-                                pageOffset += sizeof(float);
-                                break;
-                            case 2:
-                                ibuffer = 0;
-                                memcpy(&ibuffer, (char *) pageData + pageOffset, sizeof(int));
-                                if(recordDescriptor[i].name == attributeNames[attr_index])
-                                {
-                                    memcpy((char *) data+dataOffset, &ibuffer, sizeof(int));
-                                    dataOffset += sizeof(int);
-                                }
-                                pageOffset += sizeof(int);
-
-                                if(recordDescriptor[i].name == attributeNames[attr_index])
-                                {
-                                    memcpy((char *) data+dataOffset + sizeof(int), (char *) pageData + pageOffset, ibuffer);
-                                    attr_index++;
-                                    dataOffset += ibuffer;
-                                }
-                                pageOffset += ibuffer;
-                                break;
-                        }
-                    }
-                    else
-                    {
-                        if(recordDescriptor[i].name == attributeNames[attr_index])
-                        {
-                            nullbits_R[int(floor((double) attr_index/8))] += ((unsigned) 1 << (unsigned) (7-(attr_index%8)));
-                            attr_index++;
-                        }
-                    }
-                }
-                memcpy((char *) data, &nullbits_R, nullField_R);
+//                //get nullfield element to check if we have pointer of another rid
+//                memcpy(&pageOffset, (char*)pageData +(rid.slotNum),sizeof(int));
+//                memcpy(&newPageNum, (char*)pageData +(rid.slotNum-sizeof(int)*2),sizeof(int));
+//                if (newPageNum == 0)
+//                {
+//                    memcpy(&newPageNum, (char*)pageData + pageOffset,sizeof(int));
+//                    memcpy(&newSlotNum, (char*)pageData + pageOffset + sizeof(int),sizeof(int));
+//
+//                    if(fileHandle.readPage(newPageNum, pageData) == -1)
+//                        return -1;
+//
+//                    memcpy(&pageOffset, (char*)pageData + newSlotNum,sizeof(int));
+//                }
+//
+//                if(pageOffset == -1)
+//                    return -1;
+//
+//                int fieldCount_R = attributeNames.size();
+//                int nullField_R = ceil((double) fieldCount_R/ 8);
+//                unsigned char nullbits_R[nullField_R];
+//                //set the datas nullfeilds
+//                for(int i = 0; i < nullField_R; i++)
+//                    nullbits_R[i] = 0;
+//                dataOffset += nullField_R;
+//
+//                int fieldCount = recordDescriptor.size();
+//                int nullField = ceil((double) fieldCount/ 8);
+//
+//                unsigned char nullbits[nullField];
+//                memcpy(nullbits, (char*)pageData + pageOffset, nullField);
+//                pageOffset += nullField;
+//
+//                int attr_index = 0; //I am assuming the attribute names are in order with the record descriptor
+//                for(int i=0; i < recordDescriptor.size();i++)
+//                {
+//
+//                    bool nullBit = nullbits[int(floor((double) i/8))] & ((unsigned) 1 << (unsigned) (7-(i%8)));
+//                    if(!nullBit) {
+//                        switch (recordDescriptor[i].type) {
+//                            case 0:
+//                                if(recordDescriptor[i].name == attributeNames[attr_index])
+//                                {
+//                                    memcpy((char *) data+dataOffset, (char *) pageData + pageOffset, sizeof(int));
+//                                    attr_index++;
+//                                    dataOffset += sizeof(int);
+//                                }
+//                                pageOffset += sizeof(int);
+//                                break;
+//                            case 1:
+//                                if(recordDescriptor[i].name == attributeNames[attr_index])
+//                                {
+//                                    memcpy((char *) data + dataOffset, (char *) pageData + pageOffset, sizeof(float));
+//                                    attr_index++;
+//                                    dataOffset += sizeof(float);
+//                                }
+//                                pageOffset += sizeof(float);
+//                                break;
+//                            case 2:
+//                                ibuffer = 0;
+//                                memcpy(&ibuffer, (char *) pageData + pageOffset, sizeof(int));
+//                                if(recordDescriptor[i].name == attributeNames[attr_index])
+//                                {
+//                                    memcpy((char *) data+dataOffset, &ibuffer, sizeof(int));
+//                                    dataOffset += sizeof(int);
+//                                }
+//                                pageOffset += sizeof(int);
+//
+//                                if(recordDescriptor[i].name == attributeNames[attr_index])
+//                                {
+//                                    memcpy((char *) data+dataOffset + sizeof(int), (char *) pageData + pageOffset, ibuffer);
+//                                    attr_index++;
+//                                    dataOffset += ibuffer;
+//                                }
+//                                pageOffset += ibuffer;
+//                                break;
+//                        }
+//                    }
+//                    else
+//                    {
+//                        if(recordDescriptor[i].name == attributeNames[attr_index])
+//                        {
+//                            nullbits_R[int(floor((double) attr_index/8))] += ((unsigned) 1 << (unsigned) (7-(attr_index%8)));
+//                            attr_index++;
+//                        }
+//                    }
+//                }
+//                memcpy((char *) data, &nullbits_R, nullField_R);
                 return 0;
             }
 

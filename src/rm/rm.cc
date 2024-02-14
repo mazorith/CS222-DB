@@ -575,12 +575,13 @@ namespace PeterDB {
         rm_ScanIterator.attrs = attrs;
         rm_ScanIterator.table_name = tableName;
 
-        rm_ScanIterator.rbfm_ScanIterator = &rbfm_ScanIterator;
+//        rm_ScanIterator.rbfm_ScanIterator = &rbfm_ScanIterator;
         rm_ScanIterator.rbfm = rbfm;
 
         rm_ScanIterator.scan_function = true;
         rm_ScanIterator.file_is_open = false;
         rm_ScanIterator.rids = rbfm_ScanIterator.rids;
+        rbfm_ScanIterator.rids = std::vector<RID>();
 
 
         return rbfm->closeFile(fileHandle);
@@ -597,6 +598,8 @@ namespace PeterDB {
 
             if(index >= rids.size())
             {
+                rids = std::vector<RID>();
+                index = 0;
                 return RM_EOF;
             }
 

@@ -665,9 +665,9 @@ namespace PeterDB {
         memcpy(nullbits, (char*)pageData + pageOffset, nullField);
         pageOffset += nullField;
 
+        unsigned char nbit = (unsigned char) 0 << (unsigned) 7;
         for(int i=0; i < recordDescriptor.size();i++)
         {
-
             bool nullBit = nullbits[int(floor((double) i/8))] & ((unsigned) 1 << (unsigned) (7-(i%8)));
             if(!nullBit) {
                 switch (recordDescriptor[i].type) {
@@ -697,13 +697,11 @@ namespace PeterDB {
             else
             {
                 if(recordDescriptor[i].name == attributeName)
-                {
-                    unsigned char nbit = (unsigned char) 1 << (unsigned) 7;
-                    memcpy((char *) data, &nbit, 1);
-                }
+                    nbit = (unsigned char) 1 << (unsigned) 7;
             }
         }
 
+        memcpy((char *) data, &nbit, 1);
         free(pageData);
         return 0;
     }
@@ -733,31 +731,11 @@ namespace PeterDB {
 
         //=====================CHECKING FOR UPDATED VALUES========================
         //only need these if we are reading from a rid pointer in a page
-//        int pageOffset = 0;
-//        int newPageNum = 0;
-//        int newSlotNum = 0;
-//
-//        //check if rid exists within current page
-//        memcpy(&pageOffset, (char*)pageData +(4088), sizeof(int));
-//        if(pageOffset >= rid.slotNum)
-//            return -1;
-//
-//        //get nullfield element to check if we have pointer of another rid
-//        memcpy(&pageOffset, (char*)pageData +(rid.slotNum),sizeof(int));
-//        memcpy(&newPageNum, (char*)pageData +(rid.slotNum-sizeof(int)*2),sizeof(int));
-//        if (newPageNum == 0)
-//        {
-//            memcpy(&newPageNum, (char*)pageData + pageOffset,sizeof(int));
-//            memcpy(&newSlotNum, (char*)pageData + pageOffset + sizeof(int),sizeof(int));
-//
-//            if(fileHandle.readPage(newPageNum, pageData) == -1)
-//                return -1;
-//
-//            memcpy(&pageOffset, (char*)pageData + newSlotNum,sizeof(int));
-//        }
-//
-//        if(pageOffset == -1)
-//            return -1;
+        int pageOffset = 0;
+        int newPageNum = 0;
+        int newSlotNum = 0;
+        bool updated_value = false;
+        RID rid_swap;
         //===============================END CHECK================================
 
         bool accept_data = true;
@@ -765,8 +743,10 @@ namespace PeterDB {
         int compInt;
         float float_holder = 0.0;
         float compFloat;
-        std::string str_holder = "";
-        const char* compStr;
+        const char* str_holder;
+        void* str_holder_data = malloc(500);
+//        const char* compStrPre;
+        std::string compStr;
         int dataType = 0; //int 0, float 1, string 2
         if (conditionAttribute != "")
         {
@@ -779,21 +759,23 @@ namespace PeterDB {
                     {
                         dataType = 2;
                         compStr = static_cast<const char*>(value);
+//                        compStr = compStrPre;
+//                        compInt = *reinterpret_cast<const int*>(value);
                     } else if (recordDescriptor[i].type == AttrType::TypeReal)
                     {
                         dataType = 1;
                         compFloat = *reinterpret_cast<const float*>(value);
                     }
-                else
-                    compInt = *reinterpret_cast<const int*>(value);
+                    else
+                        compInt = *reinterpret_cast<const int*>(value);
 
                     i = recordDescriptor.size();
                 }
             }
         }
 
-        rbfm_ScanIterator.recordDescriptor = recordDescriptor;
-        rbfm_ScanIterator.attributeNames = attributeNames;
+//        rbfm_ScanIterator.recordDescriptor = recordDescriptor;
+//        rbfm_ScanIterator.attributeNames = attributeNames;
 
         while(rid.pageNum < fileHandle.appendPageCounter)
         {
@@ -811,105 +793,153 @@ namespace PeterDB {
 
             if(rid.pageNum < fileHandle.appendPageCounter)
             {
-                if(conditionAttribute != "")
-                {
-                    readAttribute(fileHandle, recordDescriptor, rid, conditionAttribute, data);
-                    memcpy(&nullTestVar, (char *)data, 1);
-                    if(!bool((nullTestVar & ((unsigned) 1 << (unsigned) 7))))
-                    {
-                        // we dont know what values we will need to check so we will need nested switch statments
-                        accept_data = false;
-                        switch(dataType)
-                        {
-                            case 0:
-                                memcpy(&int_holder, (char*) data+1, sizeof(int));
-                                switch(compOp)
-                                {
-                                    case 0:
-                                        accept_data = (int_holder == compInt);
-                                        break;
-                                    case 1:
-                                        accept_data = (int_holder < compInt);
-                                        break;
-                                    case 2:
-                                        accept_data = (int_holder <= compInt);
-                                        break;
-                                    case 3:
-                                        accept_data = (int_holder > compInt);
-                                        break;
-                                    case 4:
-                                        accept_data = (int_holder >= compInt);
-                                        break;
-                                    case 5:
-                                        accept_data = (int_holder != compInt);
-                                        break;
-                                    case 6:
-                                        accept_data = true;
-                                        break;
-                                }
-                                break;
-                            case 1:
-                                memcpy(&float_holder, (char*) data+1, sizeof(float));
-                                switch(compOp)
-                                {
-                                    case 0:
-                                        accept_data = (float_holder == compFloat);
-                                        break;
-                                    case 1:
-                                        accept_data = (float_holder < compFloat);
-                                        break;
-                                    case 2:
-                                        accept_data = (float_holder <= compFloat);
-                                        break;
-                                    case 3:
-                                        accept_data = (float_holder > compFloat);
-                                        break;
-                                    case 4:
-                                        accept_data = (float_holder >= compFloat);
-                                        break;
-                                    case 5:
-                                        accept_data = (float_holder != compFloat);
-                                        break;
-                                    case 6:
-                                        accept_data = true;
-                                        break;
-                                }
-                                break;
-                            case 2:
-                                memcpy(&int_holder, (char*) data+1, sizeof(int));
-                                memcpy((char*)str_holder.data(), (char*) data+5, int_holder);
-                                switch(compOp)
-                                {
+                //=====================CHECKING FOR UPDATED VALUES========================
+                //check if rid exists within current page
+                memcpy(&pageOffset, (char*)pageData +(4088), sizeof(int));
+                if(pageOffset >= rid.slotNum)
+                    return -1;
 
-                                    case 0:
-                                        accept_data = (str_holder == compStr);
-                                        break;
-                                    case 1:
-                                        accept_data = (str_holder < compStr);
-                                        break;
-                                    case 2:
-                                        accept_data = (str_holder <= compStr);
-                                        break;
-                                    case 3:
-                                        accept_data = (str_holder > compStr);
-                                        break;
-                                    case 4:
-                                        accept_data = (str_holder >= compStr);
-                                        break;
-                                    case 5:
-                                        accept_data = (str_holder != compStr);
-                                        break;
-                                    case 6:
-                                        accept_data = true;
-                                        break;
-                                }
-                                break;
-                        }
-                    }
+                //get nullfield element to check if we have pointer of another rid
+                memcpy(&pageOffset, (char*)pageData +(rid.slotNum),sizeof(int));
+                memcpy(&newPageNum, (char*)pageData +(rid.slotNum-sizeof(int)*2),sizeof(int));
+                if (newPageNum == 0)
+                {
+                    memcpy(&newPageNum, (char*)pageData + pageOffset,sizeof(int));
+                    memcpy(&newSlotNum, (char*)pageData + pageOffset + sizeof(int),sizeof(int));
+
+                    rid_swap.pageNum = rid.pageNum;
+                    rid_swap.slotNum = rid.slotNum;
+
+                    rid.pageNum = newPageNum;
+                    rid.slotNum = newSlotNum;
+
+                    if(fileHandle.readPage(newPageNum, pageData) == -1)
+                        return -1;
+
+                    memcpy(&pageOffset, (char*)pageData + newSlotNum,sizeof(int));
+
+                    updated_value = true;
                 }
 
-                if(accept_data)
-                    rbfm_ScanIterator.rids.push_back(rid);
+                if(pageOffset == -1)
+                    return -1;
+                //===============================END CHECK================================
+
+                //check if delete slot id
+                memcpy(&int_holder, (char*) pageData + rid.slotNum, sizeof(int));
+
+                if(int_holder != -1)
+                {
+                    if(conditionAttribute != "")
+                    {
+                        readAttribute(fileHandle, recordDescriptor, rid, conditionAttribute, data);
+                        memcpy(&nullTestVar, (char *)data, 1);
+                        if(!bool((nullTestVar & ((unsigned) 1 << (unsigned) 7))))
+                        {
+                            // we dont know what values we will need to check so we will need nested switch statments
+                            accept_data = false;
+                            switch(dataType)
+                            {
+                                case 0:
+                                    memcpy(&int_holder, (char*) data+1, sizeof(int));
+                                    switch(compOp)
+                                    {
+                                        case 0:
+                                            accept_data = (int_holder == compInt);
+                                            break;
+                                        case 1:
+                                            accept_data = (int_holder < compInt);
+                                            break;
+                                        case 2:
+                                            accept_data = (int_holder <= compInt);
+                                            break;
+                                        case 3:
+                                            accept_data = (int_holder > compInt);
+                                            break;
+                                        case 4:
+                                            accept_data = (int_holder >= compInt);
+                                            break;
+                                        case 5:
+                                            accept_data = (int_holder != compInt);
+                                            break;
+                                        case 6:
+                                            accept_data = true;
+                                            break;
+                                    }
+                                    break;
+                                case 1:
+                                    memcpy(&float_holder, (char*) data+1, sizeof(float));
+                                    switch(compOp)
+                                    {
+                                        case 0:
+                                            accept_data = (float_holder == compFloat);
+                                            break;
+                                        case 1:
+                                            accept_data = (float_holder < compFloat);
+                                            break;
+                                        case 2:
+                                            accept_data = (float_holder <= compFloat);
+                                            break;
+                                        case 3:
+                                            accept_data = (float_holder > compFloat);
+                                            break;
+                                        case 4:
+                                            accept_data = (float_holder >= compFloat);
+                                            break;
+                                        case 5:
+                                            accept_data = (float_holder != compFloat);
+                                            break;
+                                        case 6:
+                                            accept_data = true;
+                                            break;
+                                    }
+                                    break;
+                                case 2:
+                                    memcpy(&int_holder, (char*) data+1, sizeof(int));
+                                    memcpy((char*)str_holder_data, (char*) data+5, int_holder);
+                                    str_holder = reinterpret_cast<const char*>(str_holder_data);
+                                    switch(compOp)
+                                    {
+
+                                        case 0:
+                                            accept_data = (str_holder == compStr);
+                                            break;
+                                        case 1:
+                                            accept_data = (str_holder < compStr);
+                                            break;
+                                        case 2:
+                                            accept_data = (str_holder <= compStr);
+                                            break;
+                                        case 3:
+                                            accept_data = (str_holder > compStr);
+                                            break;
+                                        case 4:
+                                            accept_data = (str_holder >= compStr);
+                                            break;
+                                        case 5:
+                                            accept_data = (str_holder != compStr);
+                                            break;
+                                        case 6:
+                                            accept_data = true;
+                                            break;
+                                    }
+                                    break;
+                            }
+                        }
+                    }
+
+                    if(accept_data)
+                        rbfm_ScanIterator.rids.push_back(rid);
+                }
+
+                //if we found an updated value we need to reset rid values and reload page
+                if(updated_value)
+                {
+                    rid.pageNum = rid_swap.pageNum;
+                    rid.slotNum = rid_swap.slotNum;
+                    fileHandle.readPage(rid.pageNum, pageData);
+                    updated_value = false;
+                }
 
                 rid.slotNum -= 12;
             }
@@ -917,6 +947,7 @@ namespace PeterDB {
 
         free(data);
         free(pageData);
+        free(str_holder_data);
         return 0;
     }
 
@@ -971,57 +1002,50 @@ namespace PeterDB {
         memcpy(nullbits, (char*)pageData + pageOffset, nullField);
         pageOffset += nullField;
 
-        int attr_index = 0; //I am assuming the attribute names are in order with the record descriptor
-        for(int i=0; i < recordDescriptor.size();i++)
+        //currently in the scan attribute names are not in order with the attributes vector
+        //loop the whole record for each attribute to adhere to the insertRecord schema
+        int prePageOffset = pageOffset;
+        for(int rs = 0; rs < attributeNames.size(); rs++)
         {
-
-            bool nullBit = nullbits[int(floor((double) i/8))] & ((unsigned) 1 << (unsigned) (7-(i%8)));
-            if(!nullBit) {
-                switch (recordDescriptor[i].type) {
-                    case 0:
-                        if(recordDescriptor[i].name == attributeNames[attr_index])
-                        {
-                            memcpy((char *) data+dataOffset, (char *) pageData + pageOffset, sizeof(int));
-                            attr_index++;
-                            dataOffset += sizeof(int);
-                        }
-                        pageOffset += sizeof(int);
-                        break;
-                    case 1:
-                        if(recordDescriptor[i].name == attributeNames[attr_index])
-                        {
-                            memcpy((char *) data + dataOffset, (char *) pageData + pageOffset, sizeof(float));
-                            attr_index++;
-                            dataOffset += sizeof(float);
-                        }
-                        pageOffset += sizeof(float);
-                        break;
-                    case 2:
-                        ibuffer = 0;
-                        memcpy(&ibuffer, (char *) pageData + pageOffset, sizeof(int));
-                        if(recordDescriptor[i].name == attributeNames[attr_index])
-                        {
-                            memcpy((char *) data+dataOffset, &ibuffer, sizeof(int));
-                            dataOffset += sizeof(int);
-                        }
-                        pageOffset += sizeof(int);
-
-                        if(recordDescriptor[i].name == attributeNames[attr_index])
-                        {
-                            memcpy((char *) data+dataOffset, (char *) pageData + pageOffset, ibuffer);
-                            attr_index++;
-                            dataOffset += ibuffer;
-                        }
-                        pageOffset += ibuffer;
-                        break;
-                }
-            }
-            else
+            pageOffset = prePageOffset;
+            for (int i = 0; i < recordDescriptor.size(); i++)
             {
-                if(recordDescriptor[i].name == attributeNames[attr_index])
-                {
-                    nullbits_R[int(floor((double) attr_index/8))] += ((unsigned) 1 << (unsigned) (7-(attr_index%8)));
-                    attr_index++;
+                bool nullBit = nullbits[int(floor((double) i / 8))] & ((unsigned) 1 << (unsigned) (7 - (i % 8)));
+                if (!nullBit) {
+                    switch (recordDescriptor[i].type) {
+                        case 0:
+                            if (recordDescriptor[i].name == attributeNames[rs])
+                            {
+                                memcpy((char *) data + dataOffset, (char *) pageData + pageOffset, sizeof(int));
+                                dataOffset += sizeof(int);
+                            }
+                            pageOffset += sizeof(int);
+                            break;
+                        case 1:
+                            if (recordDescriptor[i].name == attributeNames[rs])
+                            {
+                                memcpy((char *) data + dataOffset, (char *) pageData + pageOffset, sizeof(float));
+                                dataOffset += sizeof(float);
+                            }
+                            pageOffset += sizeof(float);
+                            break;
+                        case 2:
+                            ibuffer = 0;
+                            memcpy(&ibuffer, (char *) pageData + pageOffset, sizeof(int));
+                            if (recordDescriptor[i].name == attributeNames[rs])
+                            {
+                                memcpy((char *) data + dataOffset, &ibuffer, sizeof(int));
+                                dataOffset += sizeof(int);
+                                memcpy((char *) data + dataOffset, (char *) pageData + pageOffset, ibuffer);
+                                dataOffset += ibuffer;
+                            }
+                            pageOffset += sizeof(int);
+                            pageOffset += ibuffer;
+                            break;
+                    }
+                } else {
+                    if (recordDescriptor[i].name == attributeNames[rs])
+                        nullbits_R[int(floor((double) rs / 8))] += ((unsigned) 1 << (unsigned) (7 - (rs % 8)));
                 }
             }
         }
