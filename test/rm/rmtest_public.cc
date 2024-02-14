@@ -986,7 +986,7 @@ namespace PeterDBTesting {
 
         size_t tupleSize;
         bufSize = 1000;
-        int numTuples = 100;
+        int numTuples = 5000;
         inBuffer = malloc(bufSize);
         outBuffer = malloc(bufSize);
         std::vector<float> lats;
@@ -1075,7 +1075,7 @@ namespace PeterDBTesting {
 
         size_t tupleSize;
         bufSize = 1000;
-        int numTuples = 100;
+        int numTuples = 5000;
         inBuffer = malloc(bufSize);
         outBuffer = malloc(bufSize);
         std::vector<float> lats;
@@ -1178,7 +1178,7 @@ namespace PeterDBTesting {
         // 3. scan - NO_OP
         size_t tupleSize;
         bufSize = 1000;
-        int numTuples = 100;
+        int numTuples = 5000;
         inBuffer = malloc(bufSize);
         outBuffer = malloc(bufSize);
         std::vector<float> lats;
@@ -1266,7 +1266,7 @@ namespace PeterDBTesting {
 
         bufSize = 1000;
         size_t tupleSize = 0;
-        int numTuples = 100;
+        int numTuples = 5000;
 
         inBuffer = malloc(bufSize);
         outBuffer = malloc(bufSize);
@@ -1326,129 +1326,129 @@ namespace PeterDBTesting {
 
     }
 //
-//    TEST_F(RM_Catalog_Scan_Test_2, try_to_modify_catalog) {
-//        // Functions tested
-//        // An attempt to modify System Catalogs tables - should no succeed
-//
-//        bufSize = 1000;
-//        inBuffer = malloc(bufSize);
-//        outBuffer = malloc(bufSize);
-//
-//        // GetAttributes
-//        ASSERT_EQ(rm.getAttributes("Tables", attrs), success) << "RelationManager::getAttributes() should succeed.";
-//
-//        // Try to insert a row - should not succeed
-//        nullsIndicator = initializeNullFieldsIndicator(attrs);
-//
-//        int offset = 1;
-//        int intValue = 0;
-//        int varcharLength = 7;
-//        std::string varcharStr = "Testing";
-//        float floatValue = 0.0;
-//
-//        for (auto &attr : attrs) {
-//            // Generating INT value
-//            if (attr.type == PeterDB::TypeInt) {
-//                intValue = 9999;
-//                memcpy((char *) inBuffer + offset, &intValue, sizeof(int));
-//                offset += sizeof(int);
-//            } else if (attr.type == PeterDB::TypeReal) {
-//                // Generating FLOAT value
-//                floatValue = 9999.9;
-//                memcpy((char *) inBuffer + offset, &floatValue, sizeof(float));
-//                offset += sizeof(float);
-//            } else if (attr.type == PeterDB::TypeVarChar) {
-//                // Generating VarChar value
-//                memcpy((char *) inBuffer + offset, &varcharLength, sizeof(int));
-//                offset += sizeof(int);
-//                memcpy((char *) inBuffer + offset, varcharStr.c_str(), varcharLength);
-//                offset += varcharLength;
-//            }
-//        }
-//
-//        ASSERT_NE(rm.insertTuple("Tables", inBuffer, rid), success)
-//                                    << "The system catalog should not be altered by a user's insertion call.";
-//
-//        // Try to delete the system catalog
-//        ASSERT_NE (rm.deleteTable("Tables"), success) << "The system catalog should not be deleted by a user call.";
-//
-//
-//        // GetAttributes
-//        attrs.clear();
-//        ASSERT_EQ(rm.getAttributes("Columns", attrs), success) << "RelationManager::getAttributes() should succeed.";
-//
-//        // Try to insert a row - should not succeed
-//        free(nullsIndicator);
-//        nullsIndicator = initializeNullFieldsIndicator(attrs);
-//        memset(inBuffer, 0, bufSize);
-//        for (auto &attr : attrs) {
-//            // Generating INT value
-//            if (attr.type == PeterDB::TypeInt) {
-//                intValue = 9999;
-//                memcpy((char *) inBuffer + offset, &intValue, sizeof(int));
-//                offset += sizeof(int);
-//            } else if (attr.type == PeterDB::TypeReal) {
-//                // Generating FLOAT value
-//                floatValue = 9999.9;
-//                memcpy((char *) inBuffer + offset, &floatValue, sizeof(float));
-//                offset += sizeof(float);
-//            } else if (attr.type == PeterDB::TypeVarChar) {
-//                // Generating VarChar value
-//                memcpy((char *) inBuffer + offset, &varcharLength, sizeof(int));
-//                offset += sizeof(int);
-//                memcpy((char *) inBuffer + offset, varcharStr.c_str(), varcharLength);
-//                offset += varcharLength;
-//            }
-//        }
-//
-//        ASSERT_NE(rm.insertTuple("Columns", inBuffer, rid), success)
-//                                    << "The system catalog should not be altered by a user's insertion call.";
-//
-//        // Try to delete the system catalog
-//        ASSERT_NE (rm.deleteTable("Columns"), success) << "The system catalog should not be deleted by a user call.";
-//
-//
-//        attrs.clear();
-//        // GetAttributes
-//        ASSERT_EQ(rm.getAttributes("Tables", attrs), success) << "RelationManager::getAttributes() should succeed.";
-//
-//        // Set up the iterator
-//        std::vector<std::string> projected_attrs;
-//        projected_attrs.reserve((int) attrs.size());
-//        for (PeterDB::Attribute &attr : attrs) {
-//            projected_attrs.push_back(attr.name);
-//        }
-//        ASSERT_EQ(rm.scan("Tables", "", PeterDB::NO_OP, nullptr, projected_attrs, rmsi), success)
-//                                    << "RelationManager::scan() should succeed.";
-//
-//
-//        // Check Tables table
-//        checkCatalog("table-id: x, table-name: Tables, file-name: Tables");
-//
-//        // Check Columns table
-//        checkCatalog("table-id: x, table-name: Columns, file-name: Columns");
-//
-//        // Keep scanning the remaining records
-//        memset(outBuffer, 0, bufSize);
-//        int count = 0;
-//        while (rmsi.getNextTuple(rid, outBuffer) != RM_EOF) {
-//            count++;
-//            memset(outBuffer, 0, bufSize);
-//        }
-//
-//        // There should be at least one more table
-//        ASSERT_GE(count, 1) << "There should be at least one more table.";
-//
-//    }
-//
-//    TEST_F(RM_Catalog_Scan_Test_2, create_table_with_same_name) {
-//        std::vector<PeterDB::Attribute> table_attrs = parseDDL(
-//                "CREATE TABLE " + tableName +
-//                " (tweet_id INT, text VARCHAR(400), user_id INT, sentiment REAL, hash_tags VARCHAR(100), embedded_url VARCHAR(200), lat REAL, lng REAL)");
-//        ASSERT_NE(rm.createTable(tableName, table_attrs), success)
-//                                    << "Create table " << tableName << " should fail, table should already exist.";
-//
-//    }
+    TEST_F(RM_Catalog_Scan_Test_2, try_to_modify_catalog) {
+        // Functions tested
+        // An attempt to modify System Catalogs tables - should no succeed
+
+        bufSize = 1000;
+        inBuffer = malloc(bufSize);
+        outBuffer = malloc(bufSize);
+
+        // GetAttributes
+        ASSERT_EQ(rm.getAttributes("Tables", attrs), success) << "RelationManager::getAttributes() should succeed.";
+
+        // Try to insert a row - should not succeed
+        nullsIndicator = initializeNullFieldsIndicator(attrs);
+
+        int offset = 1;
+        int intValue = 0;
+        int varcharLength = 7;
+        std::string varcharStr = "Testing";
+        float floatValue = 0.0;
+
+        for (auto &attr : attrs) {
+            // Generating INT value
+            if (attr.type == PeterDB::TypeInt) {
+                intValue = 9999;
+                memcpy((char *) inBuffer + offset, &intValue, sizeof(int));
+                offset += sizeof(int);
+            } else if (attr.type == PeterDB::TypeReal) {
+                // Generating FLOAT value
+                floatValue = 9999.9;
+                memcpy((char *) inBuffer + offset, &floatValue, sizeof(float));
+                offset += sizeof(float);
+            } else if (attr.type == PeterDB::TypeVarChar) {
+                // Generating VarChar value
+                memcpy((char *) inBuffer + offset, &varcharLength, sizeof(int));
+                offset += sizeof(int);
+                memcpy((char *) inBuffer + offset, varcharStr.c_str(), varcharLength);
+                offset += varcharLength;
+            }
+        }
+
+        ASSERT_NE(rm.insertTuple("Tables", inBuffer, rid), success)
+                                    << "The system catalog should not be altered by a user's insertion call.";
+
+        // Try to delete the system catalog
+        ASSERT_NE (rm.deleteTable("Tables"), success) << "The system catalog should not be deleted by a user call.";
+
+
+        // GetAttributes
+        attrs.clear();
+        ASSERT_EQ(rm.getAttributes("Columns", attrs), success) << "RelationManager::getAttributes() should succeed.";
+
+        // Try to insert a row - should not succeed
+        free(nullsIndicator);
+        nullsIndicator = initializeNullFieldsIndicator(attrs);
+        memset(inBuffer, 0, bufSize);
+        for (auto &attr : attrs) {
+            // Generating INT value
+            if (attr.type == PeterDB::TypeInt) {
+                intValue = 9999;
+                memcpy((char *) inBuffer + offset, &intValue, sizeof(int));
+                offset += sizeof(int);
+            } else if (attr.type == PeterDB::TypeReal) {
+                // Generating FLOAT value
+                floatValue = 9999.9;
+                memcpy((char *) inBuffer + offset, &floatValue, sizeof(float));
+                offset += sizeof(float);
+            } else if (attr.type == PeterDB::TypeVarChar) {
+                // Generating VarChar value
+                memcpy((char *) inBuffer + offset, &varcharLength, sizeof(int));
+                offset += sizeof(int);
+                memcpy((char *) inBuffer + offset, varcharStr.c_str(), varcharLength);
+                offset += varcharLength;
+            }
+        }
+
+        ASSERT_NE(rm.insertTuple("Columns", inBuffer, rid), success)
+                                    << "The system catalog should not be altered by a user's insertion call.";
+
+        // Try to delete the system catalog
+        ASSERT_NE (rm.deleteTable("Columns"), success) << "The system catalog should not be deleted by a user call.";
+
+
+        attrs.clear();
+        // GetAttributes
+        ASSERT_EQ(rm.getAttributes("Tables", attrs), success) << "RelationManager::getAttributes() should succeed.";
+
+        // Set up the iterator
+        std::vector<std::string> projected_attrs;
+        projected_attrs.reserve((int) attrs.size());
+        for (PeterDB::Attribute &attr : attrs) {
+            projected_attrs.push_back(attr.name);
+        }
+        ASSERT_EQ(rm.scan("Tables", "", PeterDB::NO_OP, nullptr, projected_attrs, rmsi), success)
+                                    << "RelationManager::scan() should succeed.";
+
+
+        // Check Tables table
+        checkCatalog("table-id: x, table-name: Tables, file-name: Tables");
+
+        // Check Columns table
+        checkCatalog("table-id: x, table-name: Columns, file-name: Columns");
+
+        // Keep scanning the remaining records
+        memset(outBuffer, 0, bufSize);
+        int count = 0;
+        while (rmsi.getNextTuple(rid, outBuffer) != RM_EOF) {
+            count++;
+            memset(outBuffer, 0, bufSize);
+        }
+
+        // There should be at least one more table
+        ASSERT_GE(count, 1) << "There should be at least one more table.";
+
+    }
+
+    TEST_F(RM_Catalog_Scan_Test_2, create_table_with_same_name) {
+        std::vector<PeterDB::Attribute> table_attrs = parseDDL(
+                "CREATE TABLE " + tableName +
+                " (tweet_id INT, text VARCHAR(400), user_id INT, sentiment REAL, hash_tags VARCHAR(100), embedded_url VARCHAR(200), lat REAL, lng REAL)");
+        ASSERT_NE(rm.createTable(tableName, table_attrs), success)
+                                    << "Create table " << tableName << " should fail, table should already exist.";
+
+    }
 //===========================================================================================================================================================================
 //    TEST_F(RM_Version_Test, extra_multiple_add_drop_mix) {
 //        // Extra Credit Test Case - Functions Tested:

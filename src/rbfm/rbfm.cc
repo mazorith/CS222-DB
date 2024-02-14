@@ -1040,7 +1040,7 @@ namespace PeterDB {
                             {
                                 memcpy((char *) data + dataOffset, &ibuffer, sizeof(int));
                                 dataOffset += sizeof(int);
-                                memcpy((char *) data + dataOffset, (char *) pageData + pageOffset, ibuffer);
+                                memcpy((char *) data + dataOffset, (char *) pageData + pageOffset + sizeof(int), ibuffer);
                                 dataOffset += ibuffer;
                             }
                             pageOffset += sizeof(int);
