@@ -3,7 +3,7 @@
 
 ### 1. Basic information
  - Team #: N/A
- - Github Repo Link: https://github.com/mazorith/CS230_Project
+ - Github Repo Link: https://github.com/mazorith/CS222-DB
  - Student 1 UCI NetID: 85845302
  - Student 1 Name: Ian Harshbarger
 
