@@ -20,7 +20,6 @@ namespace PeterDB {
         FileHandle *fileHandle;
         std::string table_name; //table name is the file name, we will need it for efficiency
         bool file_is_open = false;
-        bool reset_values = true; //I can't belive I actually need this. Theres a stupid error that i'm not going to explain here
 
         void *pageData = malloc(4096);
         int end_of_page = 0;

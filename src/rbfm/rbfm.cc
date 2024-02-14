@@ -394,19 +394,20 @@ namespace PeterDB {
 
                         std::string tempStr((char *) data + offset);
                         std::string useStr = tempStr.substr(0, ibuffer);
+
                         //memcpy((char *) sbuffer, (char *) data + offset, ibuffer);
                         offset += ibuffer;
                         //std::string tempStr((char *) sbuffer);
                         //std::string useStr = tempStr.substr(0, ibuffer);
 
                         //std::cout << recordDescriptor[i].name << ":" << useStr << ", " ;
-                        out << recordDescriptor[i].name << ":" << useStr << ", ";
+                        out << recordDescriptor[i].name << ":" << useStr << ", ";//useStr << ", ";
                         break;
                 }
             }
             out << "\n";
         }
-        //free(nullbits);
+
         return 0;
     }
 
@@ -697,7 +698,7 @@ namespace PeterDB {
             else
             {
                 if(recordDescriptor[i].name == attributeName)
-                    nbit = (unsigned char) 1 << (unsigned) 7;
+                    nbit += (unsigned char) 1 << (unsigned) 7;
             }
         }
 
@@ -745,7 +746,6 @@ namespace PeterDB {
         float compFloat;
         const char* str_holder;
         void* str_holder_data = malloc(500);
-//        const char* compStrPre;
         std::string compStr;
         int dataType = 0; //int 0, float 1, string 2
         if (conditionAttribute != "")
@@ -759,7 +759,6 @@ namespace PeterDB {
                     {
                         dataType = 2;
                         compStr = static_cast<const char*>(value);
-//                        compStr = compStrPre;
 //                        compInt = *reinterpret_cast<const int*>(value);
                     } else if (recordDescriptor[i].type == AttrType::TypeReal)
                     {
@@ -834,10 +833,10 @@ namespace PeterDB {
                     {
                         readAttribute(fileHandle, recordDescriptor, rid, conditionAttribute, data);
                         memcpy(&nullTestVar, (char *)data, 1);
+                        accept_data = false;
                         if(!bool((nullTestVar & ((unsigned) 1 << (unsigned) 7))))
                         {
                             // we dont know what values we will need to check so we will need nested switch statments
-                            accept_data = false;
                             switch(dataType)
                             {
                                 case 0:
@@ -961,6 +960,11 @@ namespace PeterDB {
                 return -1;
             current_page = rid.pageNum;
         }
+
+//        void* test_str = malloc(6);
+//        const char* thing;
+//        memcpy((char*)test_str, (char*)pageData + 9,6);
+//        thing = reinterpret_cast<const char*>(test_str);
 
         int dataOffset = 0;
         int pageOffset = 0;
