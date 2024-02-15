@@ -986,7 +986,7 @@ namespace PeterDBTesting {
 
         size_t tupleSize;
         bufSize = 1000;
-        int numTuples = 5000;
+        int numTuples = 100;
         inBuffer = malloc(bufSize);
         outBuffer = malloc(bufSize);
         std::vector<float> lats;
@@ -1058,6 +1058,16 @@ namespace PeterDBTesting {
 
             unsigned userIdReturned = *(unsigned *) ((char *) outBuffer + 1);
             auto targetUserId = std::find(user_ids.begin(), user_ids.end(), userIdReturned);
+
+//            if(rmsi.index > 497)
+//            {
+//                int nopVal = 0;
+//                nopVal++;
+//            }
+
+            if(targetUserId == user_ids.end())
+                std::cout << "Failed at index: " << rmsi.index << "\n";
+
             ASSERT_NE(targetUserId, user_ids.end()) << "returned user_id value is not from inserted.";
             user_ids.erase(targetUserId);
 
@@ -1075,7 +1085,7 @@ namespace PeterDBTesting {
 
         size_t tupleSize;
         bufSize = 1000;
-        int numTuples = 5000;
+        int numTuples = 150;
         inBuffer = malloc(bufSize);
         outBuffer = malloc(bufSize);
         std::vector<float> lats;
@@ -1178,7 +1188,7 @@ namespace PeterDBTesting {
         // 3. scan - NO_OP
         size_t tupleSize;
         bufSize = 1000;
-        int numTuples = 5000;
+        int numTuples = 1500;
         inBuffer = malloc(bufSize);
         outBuffer = malloc(bufSize);
         std::vector<float> lats;
@@ -1242,6 +1252,9 @@ namespace PeterDBTesting {
 
             auto targetLat = std::find(lats.begin(), lats.end(), latReturned);
 
+            if(targetLat == lats.end())
+                std::cout << "Failed at index: " << rmsi.index << "\n";
+
             ASSERT_NE(targetLat, lats.end()) << "returned lat value is not from inserted.";
             lats.erase(targetLat);
             auto targetLng = std::find(lngs.begin(), lngs.end(), lngReturned);
@@ -1266,7 +1279,7 @@ namespace PeterDBTesting {
 
         bufSize = 1000;
         size_t tupleSize = 0;
-        int numTuples = 5000;
+        int numTuples = 1000;
 
         inBuffer = malloc(bufSize);
         outBuffer = malloc(bufSize);

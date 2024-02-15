@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <cmath>
+#include <algorithm>
 
 namespace PeterDB {
     RecordBasedFileManager &RecordBasedFileManager::instance() {
@@ -110,7 +111,7 @@ namespace PeterDB {
         {
             int totalRecordOffsets = 0;
             int totalRIDOffsets = 0;
-            if (slotOffset <= 2000){
+            if (slotOffset <= 2000){ //if we can fit a decent about of records ~3-ish on a page try and find free space
                 for (int i = -1; i+1 < appendCount+1; i++) {
                     if (i == -1)
                         fileHandle.readPage(appendCount - 1, pageData);
@@ -168,6 +169,7 @@ namespace PeterDB {
                     }
                 }
             }
+
             //if here no page is large enough overwrite the copy of the previous page
             memcpy((char *) pageData, (char *) data, slotOffset);
 
@@ -539,8 +541,9 @@ namespace PeterDB {
                     //add new record feild in page
                     memcpy((char *) pageData2 + (new_slotNum), &totalRecordOffsets2, sizeof(int));
                     totalRecordOffsets2 += slotOffset;
+                    int null_ignore_indicator = -2;
                     memcpy((char *) pageData2 + (new_slotNum-sizeof(int)), &totalRecordOffsets2, sizeof(int));
-                    memcpy((char *) pageData2 + (new_slotNum-sizeof(int)*2), &nullField, sizeof(int));
+                    memcpy((char *) pageData2 + (new_slotNum-sizeof(int)*2), &null_ignore_indicator, sizeof(int));
 
                     //update offset values at end of page
                     memcpy((char *) pageData2 + recordOffsetField, &totalRecordOffsets2, sizeof(unsigned));
@@ -742,11 +745,14 @@ namespace PeterDB {
         bool accept_data = true;
         int int_holder = 0;
         int compInt;
+
         float float_holder = 0.0;
         float compFloat;
+
         const char* str_holder;
         void* str_holder_data = malloc(500);
         std::string compStr;
+
         int dataType = 0; //int 0, float 1, string 2
         if (conditionAttribute != "")
         {
@@ -758,7 +764,11 @@ namespace PeterDB {
                     if (recordDescriptor[i].type == AttrType::TypeVarChar)
                     {
                         dataType = 2;
-                        compStr = static_cast<const char*>(value);
+
+                        memcpy(&compInt, (char*) value, sizeof(unsigned));
+                        memcpy((char*)str_holder_data, (char*) value + sizeof(unsigned), compInt);
+                        compStr = reinterpret_cast<const char*>(str_holder_data);
+                        //compStr = static_cast<const char*>(value);
 //                        compInt = *reinterpret_cast<const int*>(value);
                     } else if (recordDescriptor[i].type == AttrType::TypeReal)
                     {
@@ -827,7 +837,7 @@ namespace PeterDB {
                 //check if delete slot id
                 memcpy(&int_holder, (char*) pageData + rid.slotNum, sizeof(int));
 
-                if(int_holder != -1)
+                if(int_holder != -1 && newPageNum != -2)
                 {
                     if(conditionAttribute != "")
                     {
@@ -992,7 +1002,7 @@ namespace PeterDB {
             return -1;
 
         int fieldCount_R = attributeNames.size();
-        int nullField_R = ceil((double) fieldCount_R/ 8);
+        int nullField_R = int(ceil((double) fieldCount_R/ 8));
         unsigned char nullbits_R[nullField_R];
         //set the datas nullfeilds
         for(int i = 0; i < nullField_R; i++)
@@ -1022,6 +1032,9 @@ namespace PeterDB {
                             {
                                 memcpy((char *) data + dataOffset, (char *) pageData + pageOffset, sizeof(int));
                                 dataOffset += sizeof(int);
+
+                                ibuffer = 0;
+                                memcpy(&ibuffer, (char *) pageData + pageOffset, sizeof(int));
                             }
                             pageOffset += sizeof(int);
                             break;
