@@ -92,14 +92,17 @@ it wont work.
 
 - Scan on deleted records
 
-I haven't fully implemented this yet but I do have a design for it, which follows the same way we fail a read, update, or delete on
-deleted records in the rbfm functions. We just instead will return a value of -1 indicating the value will fail.
+This follows the same way we fail a read, update, or delete on  deleted records in the rbfm functions. We just instead will skip over 
+the value instead of returning the value of -1 indicating failure for reading a deleted file.
 
 - Scan on updated records
 
-Same as above, not fully implemented but I do have a design in place for it. If we look at the total record size and see it is only 8 bytes
-we will know it is rid link to another page and can act like we do in the readRecord function of the RBFM. (since the function handling this
-is in the RBFM anyway.)
+If we look at the total record size and see it is only 8 bytes we will know it is rid link to another page and can act like we do in the 
+readRecord function of the RBFM. (since the function handling this is in the RBFM anyway.) But to make this more robust, since we can 
+store newer values in earlier pages on an update. We also need some way to ignore the rids which are being pointed to by a tombstone. 
+To work around this I add an additional field to rid section of the dataPage. If it is 0 it is a pointer to another page, -1 if it is
+a deleted value, and -2 it that record is being pointed two by a tombstone. We can just check this value during a scan and chose
+to ignore it if its -1 or -2, else we can just use the saved rid in the tombstone to quickly check the updated value.
 
 ### 7. Implementation Detail
 - Other implementation details goes here.

@@ -750,8 +750,9 @@ namespace PeterDB {
         float compFloat;
 
         const char* str_holder;
-        void* str_holder_data = malloc(500);
-        std::string compStr;
+        //void* str_holder_data = malloc(500);
+        const char* str_holder_data = (char*)malloc(500);
+        const char* compStr = (char*)malloc(500);//std::string compStr;
 
         int dataType = 0; //int 0, float 1, string 2
         if (conditionAttribute != "")
@@ -766,8 +767,8 @@ namespace PeterDB {
                         dataType = 2;
 
                         memcpy(&compInt, (char*) value, sizeof(unsigned));
-                        memcpy((char*)str_holder_data, (char*) value + sizeof(unsigned), compInt);
-                        compStr = reinterpret_cast<const char*>(str_holder_data);
+                        memcpy((char*)compStr, (char*) value + sizeof(unsigned), compInt);//(char*)str_holder_data, (char*) value + sizeof(unsigned), compInt);
+                        //compStr = reinterpret_cast<const char*>(str_holder_data);
                         //compStr = static_cast<const char*>(value);
 //                        compInt = *reinterpret_cast<const int*>(value);
                     } else if (recordDescriptor[i].type == AttrType::TypeReal)
@@ -906,27 +907,27 @@ namespace PeterDB {
                                 case 2:
                                     memcpy(&int_holder, (char*) data+1, sizeof(int));
                                     memcpy((char*)str_holder_data, (char*) data+5, int_holder);
-                                    str_holder = reinterpret_cast<const char*>(str_holder_data);
+//                                    str_holder = reinterpret_cast<const char*>(str_holder_data);
                                     switch(compOp)
                                     {
 
                                         case 0:
-                                            accept_data = (str_holder == compStr);
+                                            accept_data = (*str_holder_data == *compStr);
                                             break;
                                         case 1:
-                                            accept_data = (str_holder < compStr);
+                                            accept_data = (*str_holder_data < *compStr);
                                             break;
                                         case 2:
-                                            accept_data = (str_holder <= compStr);
+                                            accept_data = (*str_holder_data <= *compStr);
                                             break;
                                         case 3:
-                                            accept_data = (str_holder > compStr);
+                                            accept_data = (*str_holder_data > *compStr);
                                             break;
                                         case 4:
-                                            accept_data = (str_holder >= compStr);
+                                            accept_data = (*str_holder_data >= *compStr);
                                             break;
                                         case 5:
-                                            accept_data = (str_holder != compStr);
+                                            accept_data = (*str_holder_data != *compStr);
                                             break;
                                         case 6:
                                             accept_data = true;
@@ -956,7 +957,7 @@ namespace PeterDB {
 
         free(data);
         free(pageData);
-        free(str_holder_data);
+//        free((void*)str_holder_data);
         return 0;
     }
 
