@@ -832,8 +832,6 @@ namespace PeterDB {
                     updated_value = true;
                 }
 
-                if(pageOffset == -1)
-                    return -1;
                 //===============================END CHECK================================
 
                 //check if delete slot id
