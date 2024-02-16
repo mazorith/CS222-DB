@@ -590,9 +590,10 @@ namespace PeterDB {
             //slotOffset is length of the record so:
             int slotbegin=0;
             int RIDOffsetvalue2 = 4076;
+            int null_ignore_indicator = -2;
             memcpy((char *) pageData2 + (RIDOffsetFields-sizeof(int)), &slotbegin, sizeof(int));
             memcpy((char *) pageData2 + (RIDOffsetFields-sizeof(int)*2), &slotOffset, sizeof(int));
-            memcpy((char *) pageData2 + (RIDOffsetFields-sizeof(int)*3), &nullField, sizeof(int));
+            memcpy((char *) pageData2 + (RIDOffsetFields-sizeof(int)*3), &null_ignore_indicator, sizeof(int));
             memcpy((char *) pageData2 + RIDOffsetFields, &RIDOffsetvalue2, sizeof(int ));
             memcpy((char *) pageData2 + recordOffsetField, &slotOffset, sizeof(int));
 
