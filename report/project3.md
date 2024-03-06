@@ -116,7 +116,8 @@ that the tests want:
 1.) A root node created at the first insert
 2.) Each node housed on a separate page
 
-I figured the implementation of the b+tree would be the most critical part as the other functions are trivial compared to its implementation.
+I figured the implementation of the b+tree would be the most critical part as the other functions are easier compared to its implementation.
+(which turned out to be true thankfully as I was able to get my code to pass the first 3-5 testcases in a couple of hours to save some points)
 I'm currently writing this as I had this realization. I will do my best to get the as many tests work as possible now before the deadline...
 
 If you are interested in my implementation please do look at the ix-old.cc file. Its mostly just the b+tree so it can fit more dynamically in
