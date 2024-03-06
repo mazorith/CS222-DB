@@ -10,6 +10,8 @@
 # define IX_EOF (-1)  // end of the index scan
 
 namespace PeterDB {
+    typedef unsigned PageNum;
+
     class IX_ScanIterator;
 
     class IXFileHandle;
@@ -18,6 +20,7 @@ namespace PeterDB {
 
     public:
         static IndexManager &instance();
+        RID root;
 
         // Create an index file.
         RC createFile(const std::string &fileName);
@@ -59,6 +62,25 @@ namespace PeterDB {
 
     class IX_ScanIterator {
     public:
+        int current_page_num;
+        void* pageData;
+        int current_page_offset;
+
+        int selection;
+        int low_int_key;
+        float low_real_key;
+        char* low_str_key;
+
+        int high_int_key;
+        float high_real_key;
+        char* high_str_key;
+
+        bool low_include;
+        bool high_include;
+
+        bool exists_next;
+
+        IXFileHandle* handle;
 
         // Constructor
         IX_ScanIterator();
@@ -81,11 +103,29 @@ namespace PeterDB {
         unsigned ixWritePageCounter;
         unsigned ixAppendPageCounter;
 
+        unsigned degree = 4;
+        bool has_saved_values = false;
+
+        FileHandle handle;
+
+        bool isOpen;
+
         // Constructor
         IXFileHandle();
 
         // Destructor
         ~IXFileHandle();
+
+        RC setFileName(const std::string &fileName);
+        //RC getFileName();
+
+        RC openFile(const std::string &fileName);
+        RC closeFile();
+
+        RC readPage(PageNum pageNum, void *data);
+        RC writePage(PageNum pageNum, const void *data);
+        RC appendPage(const void *data);
+        unsigned getNumberOfPages();
 
         // Put the current counter values of associated PF FileHandles into variables
         RC collectCounterValues(unsigned &readPageCount, unsigned &writePageCount, unsigned &appendPageCount);
